@@ -57,41 +57,45 @@ RouteExcess TabuSearch::route_cost(const Route& route) const {
         route_cost.duration += distance(nodes[i - 1]->id, nodes[i]->id);
         const auto& current_node = nodes[i];
 
+        // LOAD EXCESS
         current_load += current_node->load;
         if ((current_load - MAX_VEHICLE_LOAD_) > route_cost.load_excess) {
             route_cost.load_excess = current_load - MAX_VEHICLE_LOAD_;
         }
 
+        // DURATION
         if (route_cost.duration < current_node->time_window_start) {
             route_cost.duration = current_node->time_window_start;
         }
         else if (route_cost.duration > current_node->time_window_end) {
+            // TIME WINDOW EXCESS
             route_cost.time_window_excess += (route_cost.duration - current_node->time_window_end);
         }
 
+        // RIDE TIME EXCESS
         if (current_load > 0) {
             journey_times[current_node->request_id] = route_cost.duration;
         }
         else {
             const auto& pickup_time = journey_times[current_node->request_id];
-            journey_times[current_node->request_id] = route_cost.duration - pickup_time;
+            route_cost.ride_time_excess += route_cost.duration - pickup_time;
         }
-
         route_cost.duration += current_node->service_duration;
     }
+    route_cost.duration_excess = std::max(route_cost.duration - PLANNING_HORIZON_, 0.0);
     return route_cost;
 }
 
 SolutionCost TabuSearch::solution_cost(const Solution& solution, const RelaxationParams& relaxation_params) const {
     SolutionCost solution_cost{};
-    for (const Route& route : solution.routes) {
-        auto cost = route_cost(route);
-        solution_cost.route_costs.push_back(cost);
-        solution_cost.duration += cost.duration;
-        solution_cost.total_ride_time_excess += cost.ride_time_excess;
-        solution_cost.total_time_window_excess += cost.time_window_excess;
-        solution_cost.total_duration_excess += cost.duration_excess;
-        solution_cost.total_load_excess += cost.load_excess;
+    for (const auto& route : solution.routes) {
+        const auto route_excess = route_cost(route);
+        solution_cost.duration += route_excess.duration;
+        solution_cost.total_ride_time_excess += route_excess.ride_time_excess;
+        solution_cost.total_time_window_excess += route_excess.time_window_excess;
+        solution_cost.total_load_excess += route_excess.load_excess;
+        solution_cost.total_duration_excess += route_excess.duration_excess;
+        solution_cost.route_costs.push_back(route_excess);
     }
     solution_cost.total_cost = cost_function_f_s(solution_cost, relaxation_params);
     return solution_cost;
@@ -118,9 +122,11 @@ SolutionResult TabuSearch::search(int num_vehicles, int max_iterations) {
     std::cout << "Initial Solution: " << std::endl;
     SolutionPrinter::print_solution(current_solution);
     std::cout << "Total Cost: " << best_valid_cost.total_cost << std::endl;
+    std::cout << "Iterations: " << max_iterations << std::endl;
     //Solution previous_solution = current_solution;
 
     for (uint64_t iteration = 0; iteration < max_iterations; ++iteration) {
+        std::cout << "Current Iteration: " << iteration << '\r';
         //previous_solution = current_solution;
         const auto td = TABU_DURATION_;
         // clean tabu list
@@ -145,12 +151,6 @@ SolutionResult TabuSearch::search(int num_vehicles, int max_iterations) {
         current_solution = get<Solution>(current_solution_tuple);
         current_solution_cost = get<SolutionCost>(current_solution_tuple);
 
-        //if (current_solution.routes.empty()) {
-        //    std::cout << "LOL" << std::endl;
-        //    current_solution = previous_solution;
-        //    continue;
-        //}
-
         if ((current_solution_cost.total_cost < best_valid_cost.total_cost) && is_feasible(current_solution_cost)) {
             best_valid_solution = current_solution;
             best_valid_cost = current_solution_cost;
@@ -166,7 +166,6 @@ SolutionResult TabuSearch::search(int num_vehicles, int max_iterations) {
             relaxation_params.ride_time_tau *= relaxation_factor;
         }
 
-        neighbourhood.clear();
     }
 
     Solution return_solution = best_valid_solution;
@@ -565,14 +564,6 @@ TabuSearch::find_best_solution(const Neighbourhood& neighbourhood, const Relaxat
     for (int i = 0; i < neighbourhood.size(); ++i) {
         const auto& solution = neighbourhood[i];
         SolutionCost cost = solution_cost(*solution, relaxation_params);
-        for (const auto& route : solution->routes) {
-            const auto& route_excess = route.route_excess;
-            cost.duration += route_excess.duration;
-            cost.total_ride_time_excess += route_excess.ride_time_excess;
-            cost.total_time_window_excess += route_excess.time_window_excess;
-            cost.total_load_excess += route_excess.load_excess;
-            cost.total_duration_excess += route_excess.duration_excess;
-        }
         // 4.3 diversification strategy
         if (cost.total_cost >= previous_result.cost) {
             for (const auto& penalty : solution->penalty_list) {

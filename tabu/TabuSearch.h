@@ -26,7 +26,7 @@ public:
 private:
     const double MAX_SOLUTION_COST_;
     const uint16_t MAX_VEHICLE_LOAD_;
-    const uint64_t PLANNING_HORIZON_;
+    const double PLANNING_HORIZON_;
     const uint64_t TABU_DURATION_;
     const uint64_t TABU_LIST_SIZE_;
     const uint16_t PENALTY_LAMBDA_;

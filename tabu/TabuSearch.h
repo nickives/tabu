@@ -14,7 +14,7 @@
 
 class TabuSearch {
 public:
-    explicit TabuSearch(const double max_solution_cost, uint16_t max_vehicle_load, uint64_t planning_horizon,
+    explicit TabuSearch(const double max_solution_cost, uint16_t max_vehicle_load, double planning_horizon,
         const uint64_t tabu_list_size, const uint64_t tabu_duration, const uint16_t penalty_lambda,
         DARProblem darproblem)
         : MAX_SOLUTION_COST_(max_solution_cost), MAX_VEHICLE_LOAD_(max_vehicle_load),

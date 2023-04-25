@@ -95,7 +95,7 @@ SolutionCost TabuSearch::solution_cost(const Solution& solution, const Relaxatio
         solution_cost.total_time_window_excess += route_excess.time_window_excess;
         solution_cost.total_load_excess += route_excess.load_excess;
         solution_cost.total_duration_excess += route_excess.duration_excess;
-        solution_cost.route_costs.push_back(route_excess);
+        solution_cost.route_costs.push_back(route_excess)
     }
     solution_cost.total_cost = cost_function_f_s(solution_cost, relaxation_params);
     return solution_cost;
@@ -166,6 +166,7 @@ SolutionResult TabuSearch::search(int num_vehicles, int max_iterations) {
             relaxation_params.ride_time_tau *= relaxation_factor;
         }
 
+        neighbourhood.clear();
     }
 
     Solution return_solution = best_valid_solution;

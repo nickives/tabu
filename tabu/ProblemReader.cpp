@@ -6,6 +6,8 @@
 #include <filesystem>
 #include <vector>
 
+#include "tabutypes.h"
+
 using namespace std;
 
 vector<string> tokenize(const string& s) {
@@ -23,60 +25,50 @@ vector<string> tokenize(const string& s) {
 
 DARProblem ProblemReader::read(const std::string& filename)
 {
-    const std::ifstream file(filename);
+    std::ifstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Unable to open file" << std::endl;
         throw exception("Unable to open file");
     }
 
-
-
     // extract header
     char input[50]{};
     file.getline(input, 50);
     auto first_line = tokenize(input);
-    numberOfVehicles_ = stoi(first_line[0]);
-    numberOfRequests_ = stoi(first_line[1]);
-    planningHorizon_ = stoi(first_line[2]);
-    vehicleCapacity_ = stoi(first_line[3]);
-    maximumRideTime_ = stoi(first_line[4]);
+    const uint16_t number_of_vehicles = stoi(first_line[0]);
+    const uint16_t number_of_requests = stoi(first_line[1]);
+    const double planningHorizon = stoi(first_line[2]);
+    const uint16_t vehicle_capacity = stoi(first_line[3]);
+    const uint16_t maximum_ride_time = stoi(first_line[4]);
 
-    numberOfNodes_ = numberOfRequests_ * 2;
+    const auto number_of_nodes = number_of_requests * 2;
+    vector<Node> nodes;
+    nodes.reserve(number_of_nodes);
 
     // extract requests
+    uint64_t request_id = 1;
     while (!file.eof()) {
         file.getline(input, 50);
         auto current_line = tokenize(input);
         if (!current_line.empty()) {
-            // [node num] [X] [Y] [q_i - load] [d_i - service duration] [start time] [end time]
-            Request r{
-                    stod(current_line[1]), stod(current_line[2]), stoi(current_line[3]),
-                    stoi(current_line[4]),stoi(current_line[3]), stoi(current_line[3])
+            // [i - node num] [X] [Y] [q_i - load] [d_i - service duration] [e_i - start time] [l_i - end time]
+            NodeId id = stoi(current_line[0]);
+            int16_t load = stoi(current_line[3]);
+            uint32_t service_duration = stoi(current_line[5]);
+            uint32_t time_window_start = stoi(current_line[6]);
+            uint32_t time_window_end = stoi(current_line[7]);
+            double x = stod(current_line[1]);
+            double y = stod(current_line[2]);
+            Node n{
+                id, request_id, load, service_duration, time_window_start, time_window_end, x, y
             };
-            requests_.push_back(r);
+            nodes.push_back(n);
         }
     }
     file.close();
 
-    // Read distances between nodes
-    distances_ = std::vector<std::vector<double>>(numberOfNodes_, std::vector<double>(numberOfNodes_));
-    for (int i = 0; i < numberOfNodes_; ++i) {
-        for (int j = 0; j < numberOfNodes_; ++j) {
-            distances_[i][j] = arc_cost(requests_[i], requests_[j]);
-        }
-    }
-
-    // Read time windows for each request
-    timeWindows_ = std::vector<std::pair<double, double>>(numberOfNodes_);
-    for (int i = 0; i < numberOfNodes_; ++i) {
-        file >> timeWindows_[i].first >> timeWindows_[i].second;
-    }
-
-    // Read pickup and delivery nodes for each request
-    pickupDeliveryPairs_ = std::vector<std::pair<int, int>>(numberOfNodes_ / 2);
-    for (int i = 0; i < numberOfNodes_ / 2; ++i) {
-        file >> pickupDeliveryPairs_[i].first >> pickupDeliveryPairs_[i].second;
-    }
-
-    return DARProblem();
+    return DARProblem(
+        nodes, number_of_vehicles, number_of_requests, vehicle_capacity,
+        maximum_ride_time, planningHorizon
+    );
 }

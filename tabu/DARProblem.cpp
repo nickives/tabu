@@ -13,22 +13,6 @@ double DARProblem::distance(const double& x1, const double& y1, const double& x2
     return std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
 }
 
-double DARProblem::distance(const int& node_idx1, const int& node_idx2) {
-    return distances_[node_idx1][node_idx2];
-}
-
-const std::vector<Node>& DARProblem::getNodes() const {
-    return nodes_;
-}
-
-const NodeVector& DARProblem::getNodeVector() const {
-    return node_vector_;
-}
-
-const Distances& DARProblem::getDistances() const {
-    return distances_;
-}
-
 Distances DARProblem::init_distance(const std::vector<Node>& nodes) {
     Distances distances = Distances(nodes.size());
     for (int i = 0; i < nodes.size(); ++i) {

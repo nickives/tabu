@@ -7,6 +7,7 @@
 #define TABU_TABUSEARCH_H
 
 #include <utility>
+#include <unordered_map>
 #include <forward_list>
 
 #include "tabutypes.h"
@@ -17,21 +18,19 @@ public:
     explicit TabuSearch(const double max_solution_cost, uint16_t max_vehicle_load, double planning_horizon,
         const uint64_t tabu_list_size, const uint64_t tabu_duration, const uint16_t penalty_lambda,
         DARProblem darproblem)
-        : MAX_SOLUTION_COST_(max_solution_cost), MAX_VEHICLE_LOAD_(max_vehicle_load),
-        PLANNING_HORIZON_(planning_horizon), TABU_DURATION_(tabu_duration), TABU_LIST_SIZE_(tabu_list_size),
+        : MAX_SOLUTION_COST_(max_solution_cost), TABU_DURATION_(tabu_duration), TABU_LIST_SIZE_(tabu_list_size),
         PENALTY_LAMBDA_(penalty_lambda), darproblem_(std::move(darproblem)), tabu_list_(TabuList()) {};
 
-    SolutionResult search(int num_vehicles, int max_iterations);
+    SolutionResult search(int max_iterations);
 
 private:
     const double MAX_SOLUTION_COST_;
-    const uint16_t MAX_VEHICLE_LOAD_;
-    const double PLANNING_HORIZON_;
     const uint64_t TABU_DURATION_;
     const uint64_t TABU_LIST_SIZE_;
     const uint16_t PENALTY_LAMBDA_;
     TabuList tabu_list_;
     const DARProblem darproblem_;
+
     double lambda_x_attributes_{ 0 };
 
 private:
@@ -54,7 +53,7 @@ private:
     static Solution
         apply_two_opt(const Solution& solution, const int& route_idx, const int& i, const int& j);
 
-    [[nodiscard]] std::unique_ptr<Solution>
+    [[nodiscard]] Solution
         apply_single_paired_insertion(const Solution& solution, const unsigned long& from_route_idx, const int& request_idx,
             const unsigned long& to_route_idx, const RelaxationParams& relaxation_params) const;
 
@@ -96,7 +95,8 @@ private:
             const NodeVector& nodes) const;
 
     void
-        calculate_journey_times(std::vector<NodeAttributes>& node_costs, std::map<RequestId, double>& journey_times,
+        calculate_journey_times(std::vector<NodeAttributes>& node_costs,
+            std::unordered_map<RequestId, double>& journey_times,
             const int& start_pos) const;
 
     [[nodiscard]] std::pair<Solution, SolutionCost>

@@ -66,21 +66,25 @@ int main() {
             {41, 0, 0, 0, 0, 1400, 0, 0}
     };
 
-    const int max_iterations = 5000;
+    const int max_iterations = 500;
     const int max_solution_cost = 1000;
     const int max_vehicle_load = 6;
     const int planning_horizon = 1400;
+    const int max_ride_time = 1000;
     const int tabu_list_size = 50000000;
     const uint64_t penalty_lambda = 2;
     const uint64_t tabu_duration = 25;
     const int num_vehicles = 8;
 
-    DARProblem problem{ nodes };
+    DARProblem problem{
+        nodes, num_vehicles, (uint16_t)((nodes.size() / 2) - 1), max_vehicle_load, max_ride_time,
+        planning_horizon
+    };
 
     TabuSearch ts(max_solution_cost, max_vehicle_load, planning_horizon, tabu_list_size, tabu_duration, penalty_lambda, problem);
 
     try {
-        auto best_solution = ts.search(num_vehicles, max_iterations);
+        auto best_solution = ts.search(max_iterations);
         std::cout << "Best solution cost: " << best_solution.cost << std::endl;
         SolutionPrinter::print_solution(best_solution.solution);
     }

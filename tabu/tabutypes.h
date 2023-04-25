@@ -7,13 +7,10 @@
 #ifndef TABU_TABUTYPES_H
 #define TABU_TABUTYPES_H
 
-#include <map>
+#include <boost/unordered/unordered_flat_map.hpp>
 #include <list>
 #include <vector>
 #include <memory>
-
-#define MAX_RIDE_TIME 1000
-
 
 enum MoveType { SPI, SWAP, MOVE };
 typedef uint64_t RequestId;
@@ -23,10 +20,8 @@ typedef std::tuple<int, RequestId> TabuKey;
 typedef TabuKey PenaltyKey;
 typedef unsigned int TabuIteration;
 typedef unsigned int TimesAdded;
-typedef std::map<PenaltyKey, TimesAdded> PenaltyList;
-typedef std::map<TabuKey, TabuIteration> TabuList;
-typedef unsigned int Penalty;
-typedef std::map<TabuKey, Penalty> PenaltyFactors;
+typedef boost::unordered_flat_map<PenaltyKey, TimesAdded> PenaltyList;
+typedef boost::unordered_flat_map<TabuKey, TabuIteration> TabuList;
 typedef uint64_t NodeId;
 
 struct Node {
@@ -98,7 +93,7 @@ struct Solution {
     PenaltyList penalty_list;
 };
 
-typedef std::vector<std::unique_ptr<Solution>> Neighbourhood;
+typedef std::vector<Solution> Neighbourhood;
 
 
 struct RelaxationParams {

@@ -4,14 +4,13 @@
 
 #include <iostream>
 #include <vector>
-#include <map>
-#include <unordered_map>
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <list>
 #include <random>
 #include <tuple>
+#include <boost/unordered/unordered_flat_set.hpp>
 
 #include "TabuSearch.h"
 #include "InvalidSolutionException.h"
@@ -20,7 +19,7 @@
 
 bool TabuSearch::is_tabu(const TabuKey& key, const TabuList& tabu_list) {
     if (tabu_list.contains(key)) {
-        return tabu_list.at(key);
+        return tabu_list.contains(key);
     }
     return false;
 }
@@ -42,7 +41,7 @@ double TabuSearch::cost_function_f_s(const RouteExcess& route_excess, const Rela
 }
 
 double TabuSearch::distance(const NodeId& node_idx1, const NodeId& node_idx2) const {
-    return darproblem_.getDistances()[node_idx1][node_idx2];
+    return darproblem_.distances[node_idx1][node_idx2];
 }
 
 RouteExcess TabuSearch::route_cost(const Route& route) const {
@@ -52,15 +51,15 @@ RouteExcess TabuSearch::route_cost(const Route& route) const {
 
     uint16_t current_load = 0;
 
-    std::map<RequestId, double> journey_times;
+    std::unordered_map<RequestId, double> journey_times;
     for (size_t i = 1; i <= route.nodes.size() - 1; ++i) {
         route_cost.duration += distance(nodes[i - 1]->id, nodes[i]->id);
         const auto& current_node = nodes[i];
 
         // LOAD EXCESS
         current_load += current_node->load;
-        if ((current_load - MAX_VEHICLE_LOAD_) > route_cost.load_excess) {
-            route_cost.load_excess = current_load - MAX_VEHICLE_LOAD_;
+        if ((current_load - darproblem_.vehicle_capacity) > route_cost.load_excess) {
+            route_cost.load_excess = current_load - darproblem_.vehicle_capacity;
         }
 
         // DURATION
@@ -82,7 +81,7 @@ RouteExcess TabuSearch::route_cost(const Route& route) const {
         }
         route_cost.duration += current_node->service_duration;
     }
-    route_cost.duration_excess = std::max(route_cost.duration - PLANNING_HORIZON_, 0.0);
+    route_cost.duration_excess = std::max(route_cost.duration - darproblem_.planning_horizon, 0.0);
     return route_cost;
 }
 
@@ -95,7 +94,7 @@ SolutionCost TabuSearch::solution_cost(const Solution& solution, const Relaxatio
         solution_cost.total_time_window_excess += route_excess.time_window_excess;
         solution_cost.total_load_excess += route_excess.load_excess;
         solution_cost.total_duration_excess += route_excess.duration_excess;
-        solution_cost.route_costs.push_back(route_excess)
+        solution_cost.route_costs.push_back(route_excess);
     }
     solution_cost.total_cost = cost_function_f_s(solution_cost, relaxation_params);
     return solution_cost;
@@ -109,9 +108,9 @@ bool TabuSearch::is_feasible(const SolutionCost& solution_cost) const {
         && (solution_cost.total_load_excess <= 0);
 }
 
-SolutionResult TabuSearch::search(int num_vehicles, int max_iterations) {
+SolutionResult TabuSearch::search(int max_iterations) {
     RelaxationParams relaxation_params{};
-    Solution best_valid_solution = construct_initial_solution(num_vehicles);
+    Solution best_valid_solution = construct_initial_solution(darproblem_.number_of_vehicles);
     SolutionCost best_valid_cost{};
     best_valid_cost.total_cost = std::numeric_limits<double>::max();
     Solution current_solution = best_valid_solution;
@@ -122,15 +121,16 @@ SolutionResult TabuSearch::search(int num_vehicles, int max_iterations) {
     std::cout << "Initial Solution: " << std::endl;
     SolutionPrinter::print_solution(current_solution);
     std::cout << "Total Cost: " << best_valid_cost.total_cost << std::endl;
-    std::cout << "Iterations: " << max_iterations << std::endl;
+    //std::cout << "Iterations: " << max_iterations << std::endl;
     //Solution previous_solution = current_solution;
 
     for (uint64_t iteration = 0; iteration < max_iterations; ++iteration) {
-        std::cout << "Current Iteration: " << iteration << '\r';
+        //std::cout << "Current Iteration: " << iteration << '\r';
         //previous_solution = current_solution;
         const auto td = TABU_DURATION_;
         // clean tabu list
-        std::erase_if(tabu_list_, [iteration, td](const auto& pair) {
+        boost::unordered::erase_if(tabu_list_, [iteration, td](const auto& pair)
+            {
             auto const& [key, value] = pair;
             return value + td < iteration;
             });
@@ -151,6 +151,10 @@ SolutionResult TabuSearch::search(int num_vehicles, int max_iterations) {
         current_solution = get<Solution>(current_solution_tuple);
         current_solution_cost = get<SolutionCost>(current_solution_tuple);
 
+        if (is_feasible(current_solution_cost)) {
+            std::cout << "feasible" << std::endl;
+        }
+
         if ((current_solution_cost.total_cost < best_valid_cost.total_cost) && is_feasible(current_solution_cost)) {
             best_valid_solution = current_solution;
             best_valid_cost = current_solution_cost;
@@ -165,8 +169,6 @@ SolutionResult TabuSearch::search(int num_vehicles, int max_iterations) {
             relaxation_params.time_window_gamma *= relaxation_factor;
             relaxation_params.ride_time_tau *= relaxation_factor;
         }
-
-        neighbourhood.clear();
     }
 
     Solution return_solution = best_valid_solution;
@@ -190,12 +192,12 @@ Solution TabuSearch::apply_two_opt(const Solution& solution, const int& route_id
     return new_solution;
 }
 
-std::unique_ptr<Solution> TabuSearch::apply_single_paired_insertion(const Solution& solution, const unsigned long& from_route_idx,
+Solution TabuSearch::apply_single_paired_insertion(const Solution& solution, const unsigned long& from_route_idx,
     const int& request_idx, const unsigned long& to_route_idx,
     const RelaxationParams& relaxation_params) const {
-    auto new_solution = std::make_unique<Solution>(solution);
-    auto& from_route = new_solution->routes[from_route_idx];
-    auto& to_route = new_solution->routes[to_route_idx];
+    Solution new_solution = solution;
+    auto& from_route = new_solution.routes[from_route_idx];
+    auto& to_route = new_solution.routes[to_route_idx];
 
     // put request in destination route
     to_route.requests.push_back(from_route.requests[request_idx]);
@@ -219,25 +221,26 @@ std::unique_ptr<Solution> TabuSearch::apply_single_paired_insertion(const Soluti
     from_route.route_excess = get<RouteExcess>(from_route_data);
     from_route.node_attributes = get<std::vector<NodeAttributes>>(from_route_data);
 
-    const auto pickup_node = darproblem_.getNodeVector()[request.pickup_node_idx];
+    const auto pickup_node = darproblem_.node_vector[request.pickup_node_idx];
 
     // identify critical node - e_i != 0 or l_i != T
-    const bool critical_pickup = (pickup_node->time_window_start != 0) || (pickup_node->time_window_end != PLANNING_HORIZON_);
+    const bool critical_pickup = (pickup_node->time_window_start != 0) || (pickup_node->time_window_end != darproblem_.planning_horizon);
 
     // if the pickup node isn't critical, the dropoff is critical
     auto new_route = critical_pickup
         ? spi_critical_pickup(to_route.nodes, to_route, request, relaxation_params)
         : spi_critical_dropoff(to_route.nodes, to_route, request, relaxation_params);
 
-    new_route.requests = new_solution->routes[to_route_idx].requests;
+    new_route.requests = new_solution.routes[to_route_idx].requests;
 
-    new_solution->routes[to_route_idx] = new_route;
+    new_solution.routes[to_route_idx] = new_route;
 
     return new_solution;
 }
 
 std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation(const NodeVector& nodes) const {
     std::vector<NodeAttributes> node_costs;
+    node_costs.reserve(nodes.size());
     for (const auto node : nodes) {
         NodeAttributes n{ node->request_id };
         node_costs.push_back(n);
@@ -249,7 +252,10 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
     // 3: Compute F_0
     // for first leg, we can delay leaving the depot to avoid waiting at first vertex
     const auto first_leg_cost = distance(nodes[0]->id, nodes[1]->id);
-    double forward_time_slack_0 = std::max((double)nodes[0]->time_window_start, (nodes[1]->time_window_start - first_leg_cost));
+    double forward_time_slack_0 = std::max(
+        (double)nodes[0]->time_window_start,
+        (nodes[1]->time_window_start - first_leg_cost)
+    );
 
     // 4: Set D_0
     double waiting_times = 0;
@@ -262,7 +268,7 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
     compute_node_costs(node_costs, nodes, D_0);
 
     // 6: compute L_i for every request
-    std::map<RequestId, double> journey_times{};
+    std::unordered_map<RequestId, double> journey_times{};
     calculate_journey_times(node_costs, journey_times, 1);
 
     // 7: for every vertex v_j corresponding to origin of request j
@@ -286,7 +292,7 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
             const double P_j = (node_j->load < 0) && (j != nodes.size() - 1)
                 ? journey_times[node_j->request_id]
                 : 0;
-            const double L_minus_P_j = MAX_RIDE_TIME - P_j;
+            const double L_minus_P_j = darproblem_.maximum_ride_time - P_j;
 
             const auto min_l_j_minus_B_j_L_minus_P_j = std::min(l_j_minus_B_j, L_minus_P_j);
 
@@ -317,8 +323,7 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
         }
     }
     // 8: Compute violations in load, route duration, time window, and ride time constraints.
-    RouteExcess route_cost{
-        0,0,0,0 }
+    RouteExcess route_cost{0,0,0,0}
     ;
     int32_t current_load = 0;
 
@@ -326,7 +331,7 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
         const Node& current_node = *nodes[i];
         current_load += nodes[i]->load;
 
-        const int32_t load_excess = current_load - MAX_VEHICLE_LOAD_;
+        const int32_t load_excess = current_load - darproblem_.vehicle_capacity;
         if (load_excess > route_cost.load_excess) {
             route_cost.load_excess = load_excess;
         }
@@ -338,7 +343,9 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
     route_cost.duration = node_costs[node_costs.size() - 1].arrival_A - node_costs[0].departure_D;
     double ride_time_violation = 0;
     for (const auto& t : journey_times) {
-        if (t.second > MAX_RIDE_TIME) route_cost.ride_time_excess += t.second - MAX_RIDE_TIME;
+        if (t.second > darproblem_.maximum_ride_time) {
+            route_cost.ride_time_excess += t.second - darproblem_.maximum_ride_time;
+        }
     }
     route_cost.duration_excess = route_cost.duration > MAX_SOLUTION_COST_
         ? route_cost.duration - MAX_SOLUTION_COST_
@@ -348,7 +355,7 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
 }
 
 void TabuSearch::calculate_journey_times(std::vector<NodeAttributes>& node_costs,
-    std::map<RequestId, double>& journey_times, const int& start_pos) const {
+    std::unordered_map<RequestId, double>& journey_times, const int& start_pos) const {
     for (int i = start_pos; i < node_costs.size(); ++i) {
         const auto& n = node_costs[i];
         if (journey_times.contains(n.id)) {
@@ -440,8 +447,11 @@ TabuSearch::compute_node_costs(std::vector<NodeAttributes>& node_costs, const No
  */
 
 
-Neighbourhood TabuSearch::generate_neighborhood(const Solution& solution, TabuList& tabu_list, const uint64_t& current_iteration,
-    const RelaxationParams& relaxation_params) {
+Neighbourhood TabuSearch::generate_neighborhood(
+    const Solution& solution,
+    TabuList& tabu_list, const uint64_t& current_iteration,
+    const RelaxationParams& relaxation_params)
+{
     Neighbourhood neighborhood;
     neighborhood.reserve(5000);
 
@@ -459,10 +469,10 @@ Neighbourhood TabuSearch::generate_neighborhood(const Solution& solution, TabuLi
                     to_route, relaxation_params);
 
                 try {
-                    satisfies_initial_constraints(*candidate_solution);
+                    satisfies_initial_constraints(candidate_solution);
                     TabuKey key = { from_route, request.id };
                     if (tabu_list.size() < TABU_LIST_SIZE_) tabu_list[key] = current_iteration;
-                    candidate_solution->penalty_list[key] += 1;
+                    candidate_solution.penalty_list[key] += 1;
                     neighborhood.push_back(std::move(candidate_solution));
                 }
                 catch (const InvalidSolutionException& e) {
@@ -474,42 +484,12 @@ Neighbourhood TabuSearch::generate_neighborhood(const Solution& solution, TabuLi
         }
     }
 
-    //    // Swap operator
-    //    for (size_t route1 = 0; route1 < solution.size(); ++route1) {
-    //        for (size_t pos1 = 0; pos1 < solution[route1].size(); ++pos1) {
-    //            for (size_t route2 = 0; route2 < solution.size(); ++route2) {
-    //                for (size_t pos2 = 0; pos2 < solution[route2].size(); ++pos2) {
-    //                    if (route1 == route2 && pos1 == pos2) {
-    //                        continue; // Skip the same position
-    //                    }
-    //
-    //                    Solution candidate_solution = apply_swap(solution, route1,
-    //                                                             route2);
-    //                    if (is_feasible(candidate_solution)) {
-    //                        neighborhood.push_back(candidate_solution);
-    //                    }
-    //                }
-    //            }
-    //        }
-    //    }
-    //
-    //    // Two-opt operator
-    //    for (size_t route_idx = 0; route_idx < solution.size(); ++route_idx) {
-    //        for (size_t i = 0; i < solution[route_idx].size() - 1; ++i) {
-    //            for (size_t j = i + 1; j < solution[route_idx].size(); ++j) {
-    //                Solution candidate_solution = apply_two_opt(solution, route_idx, i, j);
-    //                if (is_feasible(candidate_solution)) {
-    //                    neighborhood.push_back(candidate_solution);
-    //                }
-    //            }
-    //        }
-    //    }
     return neighborhood;
 }
 
 Solution TabuSearch::construct_initial_solution(const int num_vehicles) {
     Solution initial_solution{};
-    auto nodes = darproblem_.getNodeVector();
+    auto nodes = darproblem_.node_vector;
     // we use this later for the diversification strategy.
     lambda_x_attributes_ = PENALTY_LAMBDA_ * sqrt((num_vehicles * (nodes.size() - 1)));
 
@@ -517,6 +497,9 @@ Solution TabuSearch::construct_initial_solution(const int num_vehicles) {
         std::vector<Request> req;
         NodeVector no;
         std::vector<NodeAttributes> na;
+        req.reserve((nodes.size() / 2) - 1);
+        no.reserve(nodes.size());
+        na.reserve(nodes.size());
         // put depot at start of every route
         no.push_back(nodes[0]);
         initial_solution.routes.push_back({ req, no, na, {} });
@@ -564,10 +547,10 @@ TabuSearch::find_best_solution(const Neighbourhood& neighbourhood, const Relaxat
     best_cost.total_cost = std::numeric_limits<double>::max();
     for (int i = 0; i < neighbourhood.size(); ++i) {
         const auto& solution = neighbourhood[i];
-        SolutionCost cost = solution_cost(*solution, relaxation_params);
+        SolutionCost cost = solution_cost(solution, relaxation_params);
         // 4.3 diversification strategy
         if (cost.total_cost >= previous_result.cost) {
-            for (const auto& penalty : solution->penalty_list) {
+            for (const auto& penalty : solution.penalty_list) {
                 cost.total_cost += lambda_x_attributes_ * penalty.second * cost.total_cost;
             }
         }
@@ -577,7 +560,7 @@ TabuSearch::find_best_solution(const Neighbourhood& neighbourhood, const Relaxat
         }
     }
 
-    Solution retval = *neighbourhood[best_solution_idx];
+    Solution retval = neighbourhood[best_solution_idx];
 
     return {retval, best_cost};
 }
@@ -628,8 +611,8 @@ TabuSearch::spi_critical_pickup(const NodeVector& nodes_in, const Route& route_i
     const RelaxationParams& relaxation_params) const {
 
 
-    const auto& critical_node = darproblem_.getNodeVector()[request.pickup_node_idx];
-    const auto& non_critical_node = darproblem_.getNodeVector()[request.dropoff_node_idx];
+    const auto& critical_node = darproblem_.node_vector[request.pickup_node_idx];
+    const auto& non_critical_node = darproblem_.node_vector[request.dropoff_node_idx];
 
 
     // create list of to_route nodes
@@ -718,8 +701,8 @@ Route
 TabuSearch::spi_critical_dropoff(const NodeVector& nodes_in, const Route& route_in, const Request& request,
     const RelaxationParams& relaxation_params) const {
 
-    const auto& critical_node = darproblem_.getNodeVector()[request.dropoff_node_idx];
-    const auto& non_critical_node = darproblem_.getNodeVector()[request.pickup_node_idx];
+    const auto& critical_node = darproblem_.node_vector[request.dropoff_node_idx];
+    const auto& non_critical_node = darproblem_.node_vector[request.pickup_node_idx];
 
 
     // create list of to_route nodes

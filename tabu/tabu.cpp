@@ -66,13 +66,13 @@ int main() {
             {41, 0, 0, 0, 0, 1400, 0, 0}
     };
 
-    const int max_iterations = 1000;
+    const int max_iterations = 5000;
     const int max_solution_cost = 1000;
     const int max_vehicle_load = 6;
     const int planning_horizon = 1400;
-    const int tabu_list_size = 50000;
-    const uint64_t penalty_lambda = 8;
-    const uint64_t tabu_duration = 50;
+    const int tabu_list_size = 50000000;
+    const uint64_t penalty_lambda = 2;
+    const uint64_t tabu_duration = 25;
     const int num_vehicles = 8;
 
     DARProblem problem{ nodes };

@@ -131,6 +131,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -145,6 +146,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <ControlFlowGuard>false</ControlFlowGuard>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -187,6 +192,7 @@
   <ItemGroup>
     <ClCompile Include="DARProblem.cpp" />
     <ClCompile Include="InvalidSolutionException.cpp" />
+    <ClCompile Include="ProblemReader.cpp" />
     <ClCompile Include="SolutionPrinter.cpp" />
     <ClCompile Include="tabu.cpp" />
     <ClCompile Include="TabuSearch.cpp" />
@@ -194,6 +200,7 @@
   <ItemGroup>
     <ClInclude Include="DARProblem.h" />
     <ClInclude Include="InvalidSolutionException.h" />
+    <ClInclude Include="ProblemReader.h" />
     <ClInclude Include="SolutionPrinter.h" />
     <ClInclude Include="TabuSearch.h" />
     <ClInclude Include="tabutypes.h" />

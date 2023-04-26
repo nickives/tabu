@@ -97,11 +97,11 @@ typedef std::vector<Solution> Neighbourhood;
 
 
 struct RelaxationParams {
-    double load_alpha = 1;
-    double duration_beta = 1;
-    double time_window_gamma = 1;
-    double ride_time_tau = 1;
-    uint8_t delta = 1;
+    double load_alpha = 0.01;
+    double duration_beta = 0.01;
+    double time_window_gamma = 0.01;
+    double ride_time_tau = 0.01;
+    double delta = 0.5;
 };
 
 struct SolutionResult {

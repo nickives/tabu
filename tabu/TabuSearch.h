@@ -9,33 +9,35 @@
 #include <utility>
 #include <unordered_map>
 #include <forward_list>
+#include <random>
 
 #include "tabutypes.h"
 #include "DARProblem.h"
 
 class TabuSearch {
 public:
-    explicit TabuSearch(const double max_solution_cost, uint16_t max_vehicle_load, double planning_horizon,
-        const uint64_t tabu_list_size, const uint64_t tabu_duration, const uint16_t penalty_lambda,
-        DARProblem darproblem)
-        : MAX_SOLUTION_COST_(max_solution_cost), TABU_DURATION_(tabu_duration), TABU_LIST_SIZE_(tabu_list_size),
-        PENALTY_LAMBDA_(penalty_lambda), darproblem_(std::move(darproblem)), tabu_list_(TabuList()) {};
+    explicit TabuSearch(const double max_solution_cost, const uint16_t max_vehicle_load,
+        const double planning_horizon, const double tabu_duration,
+        const double penalty_lambda, const DARProblem darproblem)
+        : MAX_SOLUTION_COST_(max_solution_cost), tabu_duration_theta_(tabu_duration),
+        penalty_lambda_(penalty_lambda), darproblem_(std::move(darproblem)),
+        tabu_list_(TabuList()) {};
 
     SolutionResult search(int max_iterations);
 
 private:
     const double MAX_SOLUTION_COST_;
-    const uint64_t TABU_DURATION_;
-    const uint64_t TABU_LIST_SIZE_;
-    const uint16_t PENALTY_LAMBDA_;
+    double tabu_duration_theta_;
+    double penalty_lambda_;
     TabuList tabu_list_;
     const DARProblem darproblem_;
 
     double lambda_x_attributes_{ 0 };
 
 private:
-    static bool
-        is_tabu(const TabuKey& key, const TabuList& tabu_list);
+    bool
+        is_tabu(const TabuKey& key, const TabuList& tabu_list,
+            const uint64_t current_iteration);
 
     [[nodiscard]] double
         distance(const NodeId& node_idx1, const NodeId& node_idx2) const;
@@ -96,7 +98,7 @@ private:
 
     void
         calculate_journey_times(std::vector<NodeAttributes>& node_costs,
-            std::unordered_map<RequestId, double>& journey_times,
+            boost::unordered_flat_map<RequestId, double>& journey_times,
             const int& start_pos) const;
 
     [[nodiscard]] std::pair<Solution, SolutionCost>
@@ -124,12 +126,49 @@ private:
         cost_function_f_s(const RouteExcess& route_excess, const RelaxationParams& relaxation_params);
 
     Route
-        spi_critical_pickup(const NodeVector& nodes, const Route& route_in,
-            const Request& request, const RelaxationParams& relaxation_params) const;
+        spi_critical_pickup(const NodeVector& nodes, const Request& request,
+            const RelaxationParams& relaxation_params) const;
 
     Route
-        spi_critical_dropoff(const NodeVector& nodes_in, const Route& route_in,
-            const Request& request, const RelaxationParams& relaxation_params) const;
+        spi_critical_dropoff(const NodeVector& nodes_in, const Request& request,
+            const RelaxationParams& relaxation_params) const;
+
+    /**
+    * Update searc params
+    * This updates the provided relaxation paramaters delta, and also the tabu duration
+    * and penalty factor.
+    * 
+    * @param relaxation_params RelaxationParams relaxation parameters to update
+    */
+    inline void
+        update_search_params(RelaxationParams& relaxation_params)
+    {
+        std::random_device r;
+        std::mt19937_64 e1(r());
+
+        // update relaxation delta
+        std::uniform_real_distribution<> random_delta(0, 0.5);
+        relaxation_params.delta = random_delta(e1);
+
+        // update penalty lambda
+        std::uniform_real_distribution<> random_lambda(0, 0.015);
+        penalty_lambda_ = random_lambda(e1);
+        update_lambda_x_attributes(penalty_lambda_);
+
+        // update tabu duration theta
+        const double theta_max = 7.5 * std::log10(darproblem_.nodes.size());
+        std::uniform_real_distribution<> random_theta(0, theta_max);
+        tabu_duration_theta_ = random_theta(e1);
+    }
+
+    inline void
+        update_lambda_x_attributes(const double lambda)
+    {
+        lambda_x_attributes_ = lambda * sqrt((darproblem_.number_of_vehicles * (darproblem_.nodes.size() - 1)));
+    }
+
+    void
+        intra_route_exchanges(Solution& solution);
 };
 
 

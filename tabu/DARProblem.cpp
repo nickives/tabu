@@ -25,12 +25,3 @@ Distances DARProblem::init_distance(const std::vector<Node>& nodes) {
     }
     return distances;
 }
-
-NodeVector DARProblem::init_node_vector(const std::vector<Node>& nodes) {
-    NodeVector nv{};
-    nv.reserve(nodes.size());
-    for (auto& node : nodes) {
-        nv.push_back(&node);
-    }
-    return nv;
-}

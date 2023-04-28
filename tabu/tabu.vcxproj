@@ -150,6 +150,7 @@
       <ControlFlowGuard>false</ControlFlowGuard>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -201,6 +202,7 @@
     <ClInclude Include="DARProblem.h" />
     <ClInclude Include="InvalidSolutionException.h" />
     <ClInclude Include="ProblemReader.h" />
+    <ClInclude Include="robin_hood.h" />
     <ClInclude Include="SolutionPrinter.h" />
     <ClInclude Include="TabuSearch.h" />
     <ClInclude Include="tabutypes.h" />

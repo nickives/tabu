@@ -20,14 +20,13 @@ public:
     explicit DARProblem(const std::vector<Node>& nodes, const uint16_t vehicles_count,
         const uint16_t requests_count, const uint16_t vehicle_cap,
         const uint16_t max_ride_time, const double plan_horizon)
-        : nodes(nodes), distances(init_distance(nodes)), node_vector(init_node_vector(nodes)),
+        : nodes(nodes), distances(init_distance(nodes)),
         number_of_vehicles(vehicles_count), number_of_requests(requests_count),
         vehicle_capacity(vehicle_cap), maximum_ride_time(max_ride_time),
         planning_horizon(plan_horizon) {};
 
 public:
     const std::vector<Node> nodes;
-    const NodeVector node_vector;
     const Distances distances;
     const uint16_t number_of_vehicles;
     const uint16_t number_of_requests;
@@ -42,8 +41,6 @@ private:
     static Distances
         init_distance(const std::vector<Node>& nodes);
 
-    static NodeVector
-        init_node_vector(const std::vector<Node>& nodes);
 };
 
 

@@ -128,8 +128,8 @@ SolutionResult TabuSearch::search(int max_iterations) {
     AspirationCriteria aspiration_criteria{};
 
     // DEBUG STUFF - REMOVE AT SOME POINT
-    Solution previous_solution = best_valid_solution;
-    SolutionCost previous_solution_cost = current_solution_cost;
+    //Solution previous_solution = best_valid_solution;
+    //SolutionCost previous_solution_cost = current_solution_cost;
 
     std::cout << "Initial Solution: " << std::endl;
     SolutionPrinter::print_solution(current_solution);
@@ -143,12 +143,12 @@ SolutionResult TabuSearch::search(int max_iterations) {
 
     // start at 1 so we don't go straight into intra-route optimisations
     for (uint64_t iteration = 1; iteration <= max_iterations; ++iteration) {
-        if ((current_solution.attribute_added == current_solution.attribute_removed
-            || (previous_solution.attribute_removed == current_solution.attribute_added)
-                && !current_solution.swap)
-            && iteration > 2) {
-            std::cout << "LOL" << std::endl;
-        }
+        //if ((current_solution.attribute_added == current_solution.attribute_removed
+        //    || (previous_solution.attribute_removed == current_solution.attribute_added)
+        //        && !current_solution.swap)
+        //    && iteration > 2) {
+        //    std::cout << "LOL" << std::endl;
+        //}
         //std::cout << "Current Iteration: " << iteration + 1 << '\r';
 
         Neighbourhood neighbourhood = generate_neighborhood(current_solution, tabu_list_,
@@ -159,8 +159,8 @@ SolutionResult TabuSearch::search(int max_iterations) {
 
 
         // DEBUG STUFF - REMOVE AT SOME POINT
-        previous_solution_cost = current_solution_cost;
-        previous_solution = current_solution;
+        //previous_solution_cost = current_solution_cost;
+        //previous_solution = current_solution;
         // END DEBUG
 
         current_solution = get<Solution>(current_solution_tuple);
@@ -1050,6 +1050,8 @@ TabuSearch::intra_route_exchanges(const Solution& solution,
     Routes new_routes;
     new_routes.reserve(solution.routes.size());
 
+    int improvement = 0;
+
     for (const auto& route : solution.routes) {
         Route route_wip = route;
         const auto original_cost = cost_function_f_s(route.route_excess, relaxation_params);
@@ -1079,6 +1081,17 @@ TabuSearch::intra_route_exchanges(const Solution& solution,
                 : spi_critical_dropoff(route_wip, request_idx, relaxation_params);
             route_wip = new_wip_route;
         }
+        const auto new_cost = cost_function_f_s(route_wip.route_excess, relaxation_params);
+        improvement += original_cost > new_cost
+            ? 1
+            : -1;
+        if (new_cost < original_cost) {
+            new_routes.push_back(route_wip);
+        }
+        else {
+            new_routes.push_back(route);
+        }
+
     }
 
     Solution new_solution{ new_routes, solution.penalty_map, solution.attribute_added, solution.attribute_removed };

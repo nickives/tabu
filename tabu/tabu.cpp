@@ -126,7 +126,7 @@ int main() {
         planning_horizon
     };
 
-    const std::string filename{ "C:\\Users\\nicki\\source\\repos\\nickives\\tabu\\tabu\\data\\tabu\\pr01" };
+    const std::string filename{ "C:\\Users\\nicki\\source\\repos\\nickives\\tabu\\tabu\\data\\tabu\\pr04" };
 
     DARProblem from_file = ProblemReader::read(filename);
 

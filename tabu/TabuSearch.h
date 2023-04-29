@@ -30,18 +30,36 @@ private:
     TabuList tabu_list_;
     const DARProblem darproblem_;
 
-    uint32_t number_of_attributes_{ 0 };
+    uint64_t number_of_attributes_{ 0 };
     double lambda_x_attributes_{ 0 };
 
 private:
     static inline bool
         is_tabu(const TabuKey& key, const TabuList& tabu_list,
-            const uint64_t current_iteration, const double tabu_duration)
+            const uint64_t current_iteration, const double tabu_duration,
+            AspirationCriteria aspiration_criteria, double current_cost)
     {
         if (tabu_list.contains(key)) {
-            const auto value = tabu_list.at(key);
-            return (current_iteration - value) <=  tabu_duration;
+            const auto tabu_iteration = tabu_list.at(key);
+
+            // if it's in the aspiration criteria
+            if (aspiration_criteria.contains(key)) {
+                // if not cheaper, tabu
+                const bool is_not_cheaper = current_cost > aspiration_criteria[key];
+                // is recent, then tabu
+                const bool is_recent = (current_iteration - tabu_iteration) < 2;
+                const auto retval = is_not_cheaper && is_recent;
+                if (retval) {
+                    const int thing = 0;
+                }
+                return retval;
+            }
+            // if it's expired
+            const auto lifetime = current_iteration - tabu_iteration;
+            // so we can generate single and swaps in same neighbourhood
+            return (lifetime <= tabu_duration && lifetime != 0);
         }
+        // definitely not tabu
         return false;
     }
 
@@ -64,9 +82,9 @@ private:
     [[nodiscard]] SolutionCost
         solution_cost(const Solution& solution, const RelaxationParams& relaxation_params) const;
 
-    static Solution
-        apply_swap(const Solution& solution, const RequestId& request_id1, const RequestId& request_id2, const int& route1,
-            const int& route2);
+    [[nodiscard]] Solution
+        apply_swap(const Solution& solution, const size_t& route_idx_1, const size_t& request_idx_1,
+            const size_t& route_idx_2, const size_t& request_idx_2, const RelaxationParams& relaxation_params);
 
     static Solution
         apply_two_opt(const Solution& solution, const int& route_idx, const int& i, const int& j);
@@ -76,8 +94,21 @@ private:
             const size_t& to_route_idx, const RelaxationParams& relaxation_params) const;
 
     Neighbourhood
-        generate_neighborhood(const Solution& solution, TabuList& tabu_list, const uint64_t& current_iteration,
-            const RelaxationParams& relaxation_params, const AspirationCriteria& aspiration_criteria, double current_cost);
+        generate_neighborhood(const Solution& solution, TabuList& tabu_list,
+            const uint64_t& current_iteration, const RelaxationParams& relaxation_params,
+            const AspirationCriteria& aspiration_criteria, double current_cost);
+
+    void
+        add_spi_to_neighbourhood(const Solution& solution, TabuList& tabu_list,
+            const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria,
+            double current_cost, const RelaxationParams& relaxation_params,
+            Neighbourhood& neighborhood);
+
+    void
+        add_swap_to_neighbourhood(const Solution& solution, TabuList& tabu_list,
+            const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria,
+            double current_cost, const RelaxationParams& relaxation_params,
+            Neighbourhood& neighborhood);
 
     [[nodiscard]] std::pair<RouteExcess, std::vector<NodeAttributes>>
         route_evaluation(const NodeVector& nodes) const;
@@ -142,11 +173,11 @@ private:
         cost_function_f_s(const RouteExcess& route_excess, const RelaxationParams& relaxation_params);
 
     Route
-        spi_critical_pickup(const Route& route, const Request& request,
+        spi_critical_pickup(const Route& route, const size_t& request_idx,
             const RelaxationParams& relaxation_params) const;
 
     Route
-        spi_critical_dropoff(const Route& route, const Request& request,
+        spi_critical_dropoff(const Route& route, const size_t& request_idx,
             const RelaxationParams& relaxation_params) const;
 
     /**
@@ -186,6 +217,10 @@ private:
     [[nodiscard]] std::pair<Solution, SolutionCost>
         intra_route_exchanges(const Solution& solution,
             const RelaxationParams& relaxation_params);
+
+    void
+        adjust_relaxation_params(RelaxationParams& relaxation_params,
+            const SolutionCost& solution_cost);
 
 };
 

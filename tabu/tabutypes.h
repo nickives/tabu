@@ -83,8 +83,9 @@ typedef std::vector<const Node*> NodeVector;
 
 struct Request {
     RequestId id;
-    NodeId pickup_node_idx;
-    NodeId dropoff_node_idx;
+
+    const Node* pickup_node;
+    const Node* dropoff_node;
 
     bool operator==(const Request& rhs) const {
         return id == rhs.id;
@@ -134,18 +135,23 @@ struct Route {
 };
 
 typedef std::vector<Route> Routes;
+struct HistoryItem {
+    PenaltyKey attribute_added{ 0,0 };
+    PenaltyKey attribute_removed{ 0,0 };
+};
 struct Solution {
     Routes routes;
     PenaltyMap penalty_map;
     PenaltyKey attribute_added{0,0};
     PenaltyKey attribute_removed{ 0,0 };
+    bool swap = false;
 };
 
 typedef std::vector<Solution> Neighbourhood;
 
 
 struct RelaxationParams {
-    double load_alpha = 10;
+    double load_alpha = 1;
     double duration_beta = 1;
     double time_window_gamma = 1;
     double ride_time_tau = 1;

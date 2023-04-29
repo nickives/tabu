@@ -119,7 +119,7 @@ int main() {
     const int max_ride_time = 90;
     const double penalty_lambda = 0.015;
     const int num_vehicles = 4;
-    const double tabu_duration_theta = 7.5 * std::log10(num_vehicles * (nodes.size() - 1));
+    const double tabu_duration_theta = 7.5 * std::log10(nodes.size());
 
     DARProblem problem{
         nodes, num_vehicles, (uint16_t)((nodes.size() / 2) - 1), max_vehicle_load, max_ride_time,

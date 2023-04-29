@@ -119,8 +119,10 @@ SolutionResult TabuSearch::search(int max_iterations) {
     SolutionCost best_valid_cost{};
     best_valid_cost.total_cost = std::numeric_limits<double>::max();
     
-    Solution current_solution = best_valid_solution;
-    SolutionCost current_solution_cost{};
+    const auto intial_solution_pair = intra_route_exchanges(best_valid_solution, relaxation_params);
+    
+    Solution current_solution{ get<Solution>(intial_solution_pair) };
+    SolutionCost current_solution_cost{ get<SolutionCost>(intial_solution_pair)};
 
     // Aspiration criterio
     AspirationCriteria aspiration_criteria{};
@@ -142,20 +144,12 @@ SolutionResult TabuSearch::search(int max_iterations) {
     // start at 1 so we don't go straight into intra-route optimisations
     for (uint64_t iteration = 1; iteration <= max_iterations; ++iteration) {
         if ((current_solution.attribute_added == current_solution.attribute_removed
-            || previous_solution.attribute_removed == current_solution.attribute_added)
+            || (previous_solution.attribute_removed == current_solution.attribute_added)
+                && !current_solution.swap)
             && iteration > 2) {
             std::cout << "LOL" << std::endl;
-            current_solution = previous_solution;
-            continue;
         }
         //std::cout << "Current Iteration: " << iteration + 1 << '\r';
-        const auto td = tabu_duration_theta_;
-        // clean tabu list
-        //robin_hood::unordered::erase_if(tabu_list_, [iteration, td](const auto& pair)
-        //    {
-        //    auto const& [key, value] = pair;
-        //    return value + td < iteration;
-        //    });
 
         Neighbourhood neighbourhood = generate_neighborhood(current_solution, tabu_list_,
             iteration, relaxation_params, aspiration_criteria, current_solution_cost.total_cost);
@@ -172,12 +166,18 @@ SolutionResult TabuSearch::search(int max_iterations) {
         current_solution = get<Solution>(current_solution_tuple);
         current_solution_cost = get<SolutionCost>(current_solution_tuple);
 
+        // we only do this for selected solutions, because for the unselected candidates
+        // the attributes remain in the original routes
+        tabu_list_[current_solution.attribute_removed] = iteration;
+        if (current_solution.swap) {
+            tabu_list_[current_solution.attribute_added] = iteration;
+        }
+
         average_costs.total_duration_excess += current_solution_cost.total_duration_excess;
         average_costs.total_load_excess += current_solution_cost.total_load_excess;
         average_costs.total_ride_time_excess += current_solution_cost.total_ride_time_excess;
         average_costs.total_time_window_excess += current_solution_cost.total_time_window_excess;
 
-        const auto relaxation_factor = 1 + relaxation_params.delta;
         if ((current_solution_cost.total_cost < best_valid_cost.total_cost) && is_feasible(current_solution_cost)) {
             
             best_valid_solution = current_solution;
@@ -190,30 +190,27 @@ SolutionResult TabuSearch::search(int max_iterations) {
                 best_valid_cost = intensified_cost;
                 best_valid_solution = get<Solution>(solution_pair);
             }
-            else {
+            else if (intensified_cost.total_cost > current_solution_cost.total_cost) {
                 ++worse;
             }
+            else {
+            ++same;
+        }
 
             // save aspiration for known good solutions
+                    // aspiration
             const auto routes_size = current_solution.routes.size();
             for (size_t route_idx = 0; route_idx < routes_size; ++route_idx) {
                 const auto& route = current_solution.routes[route_idx];
                 for (const auto& request : route.requests) {
                     TabuKey key{ route_idx, request.id };
-                    if (aspiration_criteria[key] < current_solution_cost.total_cost) {
-                        continue;
+                    if (aspiration_criteria.contains(key)) {
+                        if (aspiration_criteria[key] < current_solution_cost.total_cost) {
+                            continue;
+                        }
                     }
                     aspiration_criteria[key] = current_solution_cost.total_cost;
                 }
-            }
-
-            relaxation_params.load_alpha /= relaxation_factor;
-            relaxation_params.duration_beta /= relaxation_factor;
-            relaxation_params.time_window_gamma /= relaxation_factor;
-            relaxation_params.ride_time_tau /= relaxation_factor;
-            if (std::fetestexcept(FE_OVERFLOW)) {
-                relaxation_params = RelaxationParams{};
-                std::feclearexcept(FE_OVERFLOW);
             }
         }
         else {
@@ -236,22 +233,16 @@ SolutionResult TabuSearch::search(int max_iterations) {
                 }
                 update_search_params(relaxation_params);
             }
-            relaxation_params.load_alpha *= relaxation_factor;
-            relaxation_params.duration_beta *= relaxation_factor;
-            relaxation_params.time_window_gamma *= relaxation_factor;
-            relaxation_params.ride_time_tau *= relaxation_factor;
-            if (std::fetestexcept(FE_OVERFLOW)) {
-                relaxation_params = RelaxationParams{};
-                std::feclearexcept(FE_OVERFLOW);
-            }
-        }
 
+            adjust_relaxation_params(relaxation_params, current_solution_cost);
+        }
     }
 
     Solution return_solution = best_valid_solution;
     std::cout << std::endl;
     std::cout << "Better: " << better << std::endl;
-    std::cout << "Worse: " << worse << std::endl;
+    std::cout << "Same  : " << same << std::endl;
+    std::cout << "Worse : " << worse << std::endl;
 
     average_costs.total_duration_excess /= max_iterations;
     const double avg_load_excess = static_cast<double>(average_costs.total_load_excess) / static_cast<double>(max_iterations);
@@ -268,12 +259,47 @@ SolutionResult TabuSearch::search(int max_iterations) {
 }
 
 Solution
-TabuSearch::apply_swap(const Solution& solution, const RequestId& request_id1, const RequestId& request_id2,
-    const int& route1,
-    const int& route2) {
+TabuSearch::apply_swap(const Solution& solution, const size_t& route_idx_1, const size_t& request_idx_1,
+    const size_t& route_idx_2, const size_t& request_idx_2, const RelaxationParams& relaxation_params) {
     Solution new_solution = solution;
-    //    std::swap(new_solution[route1].requests[request_id1], new_solution[route2]);
-    //    std::swap(new_solution[route1].nodes[pos1], new_solution[route2].nodes[pos2]);
+    auto& route_1 = new_solution.routes[route_idx_1];
+    auto& route_2 = new_solution.routes[route_idx_2];
+
+    auto& request_1 = route_1.requests[request_idx_1];
+    auto& request_2 = route_2.requests[request_idx_2];
+
+    // erase the nodes from each route
+    route_1.nodes.erase(std::remove_if(route_1.nodes.begin(), route_1.nodes.end(), [request_1](const Node* element) {
+        return element->request_id == request_1.id;
+        }), route_1.nodes.end());
+
+    route_2.nodes.erase(std::remove_if(route_2.nodes.begin(), route_2.nodes.end(), [request_2](const Node* element) {
+        return element->request_id == request_2.id;
+        }), route_2.nodes.end());
+
+    // insert nodes into each route
+
+    // identify critical node - e_i != 0 or l_i != T
+    const auto& request_1_pickup_node = *request_1.pickup_node;
+    const bool request_1_critical_pickup = is_critical(request_1_pickup_node, darproblem_.planning_horizon);
+
+    const auto& request_2_pickup_node = *request_2.pickup_node;
+    const bool request_2_critical_pickup = is_critical(request_2_pickup_node, darproblem_.planning_horizon);
+
+    // swap requests between the routes - this swaps the request 1 & 2 references above!
+    std::swap(route_1.requests[request_idx_1], route_2.requests[request_idx_2]);
+
+    // if the pickup node isn't critical, the dropoff is critical
+    new_solution.routes[route_idx_1] = request_1_critical_pickup
+        ? spi_critical_pickup(route_1, request_idx_1, relaxation_params)
+        : spi_critical_dropoff(route_1, request_idx_1, relaxation_params);
+
+    new_solution.routes[route_idx_2] = request_2_critical_pickup
+        ? spi_critical_pickup(route_2, request_idx_2, relaxation_params)
+        : spi_critical_dropoff(route_2, request_idx_2, relaxation_params);
+
+
+
     return new_solution;
 }
 
@@ -294,8 +320,9 @@ Solution TabuSearch::apply_single_paired_insertion(
     // put request in destination route
     to_route.requests.push_back(from_route.requests[request_idx]);
     auto& request = to_route.requests[to_route.requests.size() - 1];
+    const auto to_request_idx = to_route.requests.size() - 1;
 
-    // remove request from original route
+    // remove request from_route
     if (from_route.requests.size() == 1) {
         from_route.requests.clear();
     }
@@ -313,17 +340,15 @@ Solution TabuSearch::apply_single_paired_insertion(
     from_route.route_excess = get<RouteExcess>(from_route_data);
     from_route.node_attributes = get<std::vector<NodeAttributes>>(from_route_data);
 
-    const auto& pickup_node = darproblem_.nodes[request.pickup_node_idx];
+    const auto& pickup_node = *request.pickup_node;
 
     // identify critical node - e_i != 0 or l_i != T
     const bool critical_pickup = is_critical(pickup_node, darproblem_.planning_horizon);
 
     // if the pickup node isn't critical, the dropoff is critical
-    auto new_route = critical_pickup
-        ? spi_critical_pickup(to_route, request, relaxation_params)
-        : spi_critical_dropoff(to_route, request, relaxation_params);
-
-    new_solution.routes[to_route_idx] = new_route;
+    new_solution.routes[to_route_idx] = critical_pickup
+        ? spi_critical_pickup(to_route, to_request_idx, relaxation_params)
+        : spi_critical_dropoff(to_route, to_request_idx, relaxation_params);
 
     return new_solution;
 }
@@ -343,17 +368,34 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
 
     //3: Compute F_0
     //for first leg, we can delay leaving the depot to avoid waiting at first vertex
-    const auto first_leg_cost = distance(nodes[0]->id, nodes[1]->id);
-    double forward_time_slack_0 = std::max(
-        (double)nodes[0]->time_window_start,
-        (nodes[1]->time_window_start - first_leg_cost)
-    );
+    //const auto first_leg_cost = distance(nodes[0]->id, nodes[1]->id);
+    //double forward_time_slack_0 = std::max(
+    //    (double)nodes[0]->time_window_start,
+    //    (nodes[1]->time_window_start - first_leg_cost)
+    //);
+
+    double forward_time_slack_0 = std::numeric_limits<double>::max();
+    for (size_t j = 0; j < nodes_size; ++j) {
+        double current_waiting_sum = 0;
+        for (size_t p = 1; p <= j; ++p) {
+            current_waiting_sum += node_costs[p].waiting_W;
+        }
+        const double l_j_minus_B_j = std::max(nodes[j]->time_window_end - node_costs[j].begin_service_B, (double)0);
+        const double current_F_0 = current_waiting_sum + l_j_minus_B_j;
+        if (current_F_0 < forward_time_slack_0) forward_time_slack_0 = current_F_0;
+        // cant't get lower than this
+        if (forward_time_slack_0 == 0) break;
+    }
+    // clamp to positive values
+    if (forward_time_slack_0 < 0) forward_time_slack_0 = 0;
 
     // 4: Set D_0
+    // 
     double waiting_times = 0;
     for (const NodeAttributes& n : node_costs) {
         waiting_times += n.waiting_W;
     }
+
     // departure time from vertex 0
     D_0 = nodes[0]->time_window_start + std::min(forward_time_slack_0, waiting_times);
 
@@ -363,6 +405,93 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
     // 6: compute L_i for every request
     robin_hood::unordered_map<RequestId, std::pair<double, ptrdiff_t>> journey_times{};
     calculate_journey_times(node_costs, journey_times, 1);
+
+    // 7: for every vertex v_j corresponding to origin of request j
+    // start at 1, 0 is depot
+    for (uint64_t i = 1; i < nodes_size; ++i) {
+        const auto& v_j = nodes[i];
+        // we only want pickup nodes
+        if (v_j->load < 1) continue;
+
+        // a: compute F_j
+        //      F_j = min_i<=j<=q {sum_i<p<=j (W_p) + (min { l_j - B_j, L - P_j })^+ }
+        double fwd_time_slack_j = std::numeric_limits<double>::max();
+        for (uint64_t j = i; j < nodes_size; ++j) {
+            const auto& node_j = nodes[j];
+            double waiting_sum = 0;
+            for (uint64_t p = i + 1; p <= j; ++p) {
+                waiting_sum += node_costs[p].waiting_W;
+            }
+            const double l_j_minus_B_j = nodes[j]->time_window_end - node_costs[j].begin_service_B;
+
+            // P_j is journey time for passenger whose destination is node j.
+            const double P_j = (node_j->load < 0) && (j != nodes_size - 1)
+                ? get<double>(journey_times[node_j->request_id])
+                : 0;
+            const double L_minus_P_j = darproblem_.maximum_ride_time - P_j;
+
+            // minium of these two, clamped to positive values
+            const auto min_l_j_minus_B_j_L_minus_P_j = std::max(std::min(l_j_minus_B_j, L_minus_P_j), (double)0);
+
+            waiting_sum += min_l_j_minus_B_j_L_minus_P_j;
+
+            if (waiting_sum < fwd_time_slack_j) {
+                fwd_time_slack_j = waiting_sum;
+            }
+
+            // can't get lower than this
+            if (fwd_time_slack_j == 0) break;
+        }
+
+        // b: B_j = B_j + min{ F_j, sum_j<p<q(W_p) }
+        //    D_j = B_j + d_j
+        double waiting_sum = 0;
+        // no point calculating this if time slack is zero
+        if (fwd_time_slack_j != 0) {
+            for (uint64_t p = i; p < nodes_size - 1; ++p) {
+                const auto& n = nodes[p];
+                waiting_sum += node_costs[p].waiting_W;
+            }
+        }
+        auto& node_costs_i = node_costs[i];
+        node_costs_i.begin_service_B += std::min(fwd_time_slack_j, waiting_sum);
+        node_costs_i.departure_D = node_costs[i].begin_service_B + v_j->service_duration;
+        node_costs_i.waiting_W = node_costs_i.begin_service_B - node_costs_i.arrival_A;
+
+        // c: compute_node_costs for each vertex AFTER j
+        if (i < nodes_size - 1) {
+            compute_node_costs(node_costs, nodes, node_costs[0].departure_D, i + 1);
+             //d: update journey times for each request whose DESTINATION is AFTER vertex j
+            calculate_journey_times(node_costs, journey_times, i);
+        }
+    }
+     //8: Compute violations in load, route duration, time window, and ride time constraints.
+    /*RouteExcess route_cost{};
+    int32_t current_load = 0;
+
+    for (uint64_t i = 0; i < nodes_size; ++i) {
+        const Node& current_node = *nodes[i];
+
+        const int32_t load_excess = current_load - darproblem_.vehicle_capacity;
+        if (load_excess > route_cost.load_excess) {
+            route_cost.load_excess = load_excess;
+        }
+
+        if (node_costs[i].arrival_A > current_node.time_window_end) {
+            route_cost.time_window_excess += node_costs[i].arrival_A - current_node.time_window_end;
+        }
+    }
+    route_cost.duration = node_costs[node_costs.size() - 1].arrival_A - node_costs[0].departure_D;
+    double ride_time_violation = 0;
+    for (const auto& t : journey_times) {
+        const auto ride_time = get<double>(t.second);
+        if (ride_time > darproblem_.maximum_ride_time) {
+            route_cost.ride_time_excess_L += ride_time - darproblem_.maximum_ride_time;
+        }
+    }
+    route_cost.duration_excess = route_cost.duration > darproblem_.planning_horizon
+        ? route_cost.duration - darproblem_.planning_horizon
+        : 0;*/
 
     RouteExcess route_excess{};
 
@@ -374,6 +503,8 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
         
         // LOAD EXCESS
         current_load += node->load;
+        // catch cases where we're inserting a dropoff and evaluating cost
+        if (current_load < 0) current_load = 0;
         const auto current_excess = current_load - darproblem_.vehicle_capacity;
         if (current_excess > route_excess.load_excess) {
             route_excess.load_excess = current_load - darproblem_.vehicle_capacity;
@@ -398,86 +529,6 @@ std::pair<RouteExcess, std::vector<NodeAttributes>> TabuSearch::route_evaluation
         ? route_excess.duration - darproblem_.planning_horizon
         : 0;
 
-    //// 7: for every vertex v_j corresponding to origin of request j
-    //const auto nodes_size = nodes.size();
-    //for (uint64_t i = 0; i < nodes_size; ++i) {
-    //    const auto& v_j = nodes[i];
-    //    // we only want pickup nodes
-    //    if (v_j->load < 1) continue;
-
-    //    // a: compute F_j
-    //    //      F_j = min_i<=j<=q {sum_i<p<=j (W_p) + (min { l_j - B_j, L - P_j })^+ }
-    //    double fwd_time_slack_j = std::numeric_limits<double>::max();
-    //    for (uint64_t j = i; j < nodes_size; ++j) {
-    //        const auto& node_j = nodes[j];
-    //        double waiting_sum = 0;
-    //        for (uint64_t p = i; p <= j; ++p) {
-    //            waiting_sum += node_costs[p].waiting_W;
-    //        }
-    //        const double l_j_minus_B_j = nodes[j]->time_window_end - node_costs[j].begin_service_B;
-
-    //        // P_j is journey time for passenger whose destination is node j.
-    //        const double P_j = (node_j->load < 0) && (j != nodes_size - 1)
-    //            ? get<double>(journey_times[node_j->request_id])
-    //            : 0;
-    //        const double L_minus_P_j = darproblem_.maximum_ride_time - P_j;
-
-    //        const auto min_l_j_minus_B_j_L_minus_P_j = std::min(l_j_minus_B_j, L_minus_P_j);
-
-    //        waiting_sum += min_l_j_minus_B_j_L_minus_P_j > 0
-    //            ? min_l_j_minus_B_j_L_minus_P_j
-    //            : 0;
-
-    //        if (waiting_sum < fwd_time_slack_j) {
-    //            fwd_time_slack_j = waiting_sum;
-    //        }
-    //    }
-
-    //    // b: B_j = B_j + min{ F_j, sum_j<p<q(W_p) }
-    //    //    D_j = B_j + d_j
-    //    double waiting_sum = 0;
-    //    for (uint64_t p = i; p < nodes_size - 1; ++p) {
-    //        const auto& n = nodes[p];
-    //        waiting_sum += node_costs[p].waiting_W;
-    //    }
-    //    node_costs[i].begin_service_B += std::min(fwd_time_slack_j, waiting_sum);
-    //    node_costs[i].departure_D = node_costs[i].begin_service_B + v_j->service_duration;
-
-    //    // c: compute_node_costs for each vertex AFTER j
-    //    if (i < nodes_size - 1) {
-    //        compute_node_costs(node_costs, nodes, node_costs[0].departure_D, i + 1);
-    //        // d: update journey times for each request whose DESTINATION is AFTER vertex j
-    //        calculate_journey_times(node_costs, journey_times, i);
-    //    }
-    //}
-    // 8: Compute violations in load, route duration, time window, and ride time constraints.
-    /*RouteExcess route_cost{};
-    int32_t current_load = 0;
-
-    for (uint64_t i = 0; i < nodes_size; ++i) {
-        const Node& current_node = *nodes[i];
-
-        const int32_t load_excess = current_load - darproblem_.vehicle_capacity;
-        if (load_excess > route_cost.load_excess) {
-            route_cost.load_excess = load_excess;
-        }
-
-        if (node_costs[i].arrival_A > current_node.time_window_end) {
-            route_cost.time_window_excess += node_costs[i].arrival_A - current_node.time_window_end;
-        }
-    }
-    route_cost.duration = node_costs[node_costs.size() - 1].arrival_A - node_costs[0].departure_D;
-    double ride_time_violation = 0;
-    for (const auto& t : journey_times) {
-        const auto ride_time = get<double>(t.second);
-        if (ride_time > darproblem_.maximum_ride_time) {
-            route_cost.ride_time_excess_L += ride_time - darproblem_.maximum_ride_time;
-        }
-    }
-    route_cost.duration_excess = route_cost.duration > MAX_SOLUTION_COST_
-        ? route_cost.duration - MAX_SOLUTION_COST_
-        : 0;*/
-
     return { route_excess, node_costs };
 }
 
@@ -490,20 +541,18 @@ void TabuSearch::calculate_journey_times(std::vector<NodeAttributes>& node_costs
         const auto& n = node_costs[i];
         if (journey_times.contains(n.request_id))
         {
-            const auto& journey_start_pos = get<ptrdiff_t>(journey_times[n.request_id]);
+            auto& jt = journey_times[n.request_id];
+            const auto& journey_start_pos = get<ptrdiff_t>(jt);
+            // this is a dropoff, so calculate duration
             if (journey_start_pos < i)
             {
-                const auto duration = n.arrival_A - get<double>(journey_times[n.request_id]);
-                journey_times[n.request_id].first = duration;
-            }
-            else {
-                // should not happen?
-                std::cout << "LOL" << std::endl;
+                const auto duration = n.arrival_A - get<double>(jt);
+                jt.first = duration;
+                continue;
             }
         }
-        else {
-            journey_times[n.request_id] = std::make_pair(n.departure_D, i);
-        }
+        // this is a dropoff
+        journey_times[n.request_id] = std::make_pair(n.departure_D, i);
     }
 }
 
@@ -557,33 +606,11 @@ TabuSearch::compute_node_costs(std::vector<NodeAttributes>& node_costs, const No
 
         current_cost.departure_D = current_cost.begin_service_B + current_node->service_duration;
 
-        current_cost.waiting_W = current_cost.arrival_A > current_node->time_window_start
-            ? 0
-            : current_node->time_window_start - current_cost.arrival_A;
+        current_cost.waiting_W = current_cost.arrival_A < current_cost.begin_service_B
+            ? current_cost.begin_service_B - current_cost.arrival_A
+            : 0;
     }
 }
-
-/*
- * V = vertex set
- * A = arc set
- * q = load (q_i)
- * d = service duration (d_i)
- * [e_i, l_i] = time window (non-negative)
- * T = end of planning horizon
- * Q_k = load limit for vehicle k
- * L = maximum ride time
- * A_i = arrival time at vertex i v_i
- * B_i = beginning of service at vertex v_i
- *          B_i >= max(e_i, A_i)
- * D_i = departure time from vertex v_i
- *          B_i + d_i
- * W_i = waiting time at vertex v_i
- *          W_i = B_i - A_i
- * L_i = ride time for request i
- *          L_i = B_(i+n) - D_i
- *  F_i = forward time slack of vertex v_i
- *  P_j = ride time of user who's destination is vertex v_j
- */
 
 
 Neighbourhood TabuSearch::generate_neighborhood(
@@ -593,12 +620,25 @@ Neighbourhood TabuSearch::generate_neighborhood(
     const AspirationCriteria& aspiriation_criteria, double current_cost)
 {
     Neighbourhood neighborhood;
-    neighborhood.reserve(150);
+    neighborhood.reserve(500);
 
     // GO OVER SECTION 4.7 - IMPLEMENT NEIGHBOURHOOD EVALUATION FROM THERE!
     // SPI
-    for (size_t from_route = 0; from_route < solution.routes.size(); ++from_route) {
-        for (size_t to_route = 0; to_route < solution.routes.size(); ++to_route) {
+    add_spi_to_neighbourhood(solution, tabu_list, current_iteration, aspiriation_criteria,
+        current_cost, relaxation_params, neighborhood);
+
+    // Swap
+    //add_swap_to_neighbourhood(solution, tabu_list, current_iteration, aspiriation_criteria,
+    //    current_cost, relaxation_params, neighborhood);
+
+    return neighborhood;
+}
+
+void TabuSearch::add_spi_to_neighbourhood(const Solution& solution, TabuList& tabu_list, const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria, double current_cost, const RelaxationParams& relaxation_params, Neighbourhood& neighborhood)
+{
+    const auto routes_size = solution.routes.size();
+    for (size_t from_route = 0; from_route < routes_size; ++from_route) {
+        for (size_t to_route = 0; to_route < routes_size; ++to_route) {
             if (from_route == to_route)
             {
                 continue;
@@ -607,22 +647,13 @@ Neighbourhood TabuSearch::generate_neighborhood(
                 const auto& request = solution.routes[from_route].requests[request_idx];
                 // Don't try to add to same route
                 const TabuKey to_key{ to_route, request.id };
-                const bool is_aspiration = aspiriation_criteria.contains(to_key);
 
                 // if it's tabu
-                if (is_tabu(to_key, tabu_list, current_iteration, tabu_duration_theta_))
+                if (is_tabu(to_key, tabu_list, current_iteration, tabu_duration_theta_,
+                    aspiriation_criteria, current_cost))
                 {
-                    // if it's not in the aspiration list but in the tabu list, skip it
-                    if (!is_aspiration) {
-                        continue;
-                    }
-
-                    // if it's in the aspiration list, and that cost is higher, skip
-                    if (aspiriation_criteria.at(to_key) > current_cost) {
-                        continue;
-                    }
+                    continue;
                 }
-
 
                 auto candidate_solution = apply_single_paired_insertion(solution, from_route, request_idx,
                     to_route, relaxation_params);
@@ -632,7 +663,6 @@ Neighbourhood TabuSearch::generate_neighborhood(
                     satisfies_initial_constraints(candidate_solution);
                     // attribute is now tabu FROM route we just removed it from
                     const TabuKey from_key{ from_route, request.id };
-                    tabu_list[from_key] = current_iteration;
 
                     // Attribute added to create this solution. Will be penalised later
                     candidate_solution.penalty_map[to_key] += 1;
@@ -650,8 +680,76 @@ Neighbourhood TabuSearch::generate_neighborhood(
             }
         }
     }
+}
 
-    return neighborhood;
+void TabuSearch::add_swap_to_neighbourhood(const Solution& solution, TabuList& tabu_list, const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria, double current_cost, const RelaxationParams& relaxation_params, Neighbourhood& neighborhood)
+{
+    const auto routes_size = solution.routes.size();
+    for (size_t route_1_idx = 0; route_1_idx < routes_size; ++route_1_idx) {
+        const auto& route_1_requests = solution.routes[route_1_idx].requests;
+        const auto route_1_requests_size = route_1_requests.size();
+
+        for (size_t route_2_idx = 0; route_2_idx < routes_size; ++route_2_idx) {
+            if (route_1_idx == route_2_idx)
+            {
+                continue;
+            }
+            const auto& route_2_requests = solution.routes[route_2_idx].requests;
+            const auto route_2_requests_size = route_2_requests.size();
+
+            for (size_t request_1_idx = 0;
+                request_1_idx < route_1_requests_size;
+                ++request_1_idx) {
+
+                const auto& request_1 = route_1_requests[route_1_idx];
+
+                // if inserting this request in route 1 is tabu
+                const TabuKey request_1_key{ route_1_idx, request_1.id };
+                if (is_tabu(request_1_key, tabu_list, current_iteration, tabu_duration_theta_,
+                    aspiriation_criteria, current_cost))
+                {
+                    continue;
+                }
+
+                for (size_t request_2_idx = 0;
+                    request_2_idx < route_2_requests_size;
+                    ++request_2_idx) {
+
+                    const auto& request_2 = route_2_requests[request_2_idx];
+
+                    // if inserting this request in route 2 is tabu
+                    const TabuKey request_2_key{ route_2_idx, request_2.id };
+                    if (is_tabu(request_2_key, tabu_list, current_iteration, tabu_duration_theta_,
+                        aspiriation_criteria, current_cost))
+                    {
+                        continue;
+                    }
+
+                    auto candidate_solution = apply_swap(solution, route_1_idx, request_1_idx,
+                        route_2_idx, request_2_idx, relaxation_params);
+
+                    try
+                    {
+                        satisfies_initial_constraints(candidate_solution);
+
+                        // Both attributes added, so both get penalties
+                        candidate_solution.penalty_map[request_1_key] += 1;
+                        candidate_solution.penalty_map[request_2_key] += 1;
+
+                        candidate_solution.attribute_added = request_1_key;
+                        candidate_solution.attribute_removed = request_2_key;
+                        candidate_solution.swap = true;
+
+                        neighborhood.push_back(candidate_solution);
+                    }
+                    catch (const InvalidSolutionException& e)
+                    {
+                        std::cout << e.what() << std::endl;
+                    }
+                }
+            }
+        }
+    }
 }
 
 Solution TabuSearch::construct_initial_solution(const int num_vehicles) {
@@ -689,7 +787,7 @@ Solution TabuSearch::construct_initial_solution(const int num_vehicles) {
         const auto node_size = current_route.nodes.size();
         current_route.nodes.push_back(pickup_node);
         current_route.nodes.push_back(dropoff_node);
-        current_route.requests.push_back({ pickup_node->request_id, pickup_node->id, dropoff_node->id });
+        current_route.requests.push_back({ pickup_node->request_id, pickup_node, dropoff_node });
     }
 
     // put depot at the end of every route
@@ -774,12 +872,14 @@ bool TabuSearch::satisfies_initial_constraints(const Solution& solution) {
 }
 
 Route
-TabuSearch::spi_critical_pickup(const Route& route, const Request& request,
+TabuSearch::spi_critical_pickup(const Route& route, const size_t& request_idx,
     const RelaxationParams& relaxation_params) const
 {
+    std::vector<Request> new_requests = route.requests;
+    auto& request = new_requests[request_idx];
     const auto& nodes_in = route.nodes;
-    const auto& critical_node = darproblem_.nodes[request.pickup_node_idx];
-    const auto& non_critical_node = darproblem_.nodes[request.dropoff_node_idx];
+    const auto& critical_node = *request.pickup_node;
+    const auto& non_critical_node = *request.dropoff_node;
 
     // create list of to_route nodes
     std::list<const Node*> nodes_list(nodes_in.begin(), nodes_in.end());
@@ -850,7 +950,7 @@ TabuSearch::spi_critical_pickup(const Route& route, const Request& request,
     nodes_list.insert(best_position, &non_critical_node);
 
     Route new_route{
-            route.requests,
+            new_requests,
             {nodes_list.begin(), nodes_list.end()},
             get<std::vector<NodeAttributes>>(best_route_costs),
             get<RouteExcess>(best_route_costs),
@@ -860,12 +960,13 @@ TabuSearch::spi_critical_pickup(const Route& route, const Request& request,
 }
 
 Route
-TabuSearch::spi_critical_dropoff(const Route& route, const Request& request,
+TabuSearch::spi_critical_dropoff(const Route& route, const size_t& request_idx,
     const RelaxationParams& relaxation_params) const {
-
+    std::vector<Request> new_requests = route.requests;
+    auto& request = new_requests[request_idx];
     const auto& nodes_in = route.nodes;
-    const auto& critical_node = darproblem_.nodes[request.dropoff_node_idx];
-    const auto& non_critical_node = darproblem_.nodes[request.pickup_node_idx];
+    const auto& critical_node = *request.dropoff_node;
+    const auto& non_critical_node = *request.pickup_node;
 
 
     // create list of to_route nodes
@@ -933,7 +1034,7 @@ TabuSearch::spi_critical_dropoff(const Route& route, const Request& request,
     nodes_list.insert(best_position, &non_critical_node);
 
     Route new_route{
-        route.requests,
+        new_requests,
         {nodes_list.begin(), nodes_list.end()},
         get<std::vector<NodeAttributes>>(best_route_costs),
         get<RouteExcess>(best_route_costs),
@@ -949,67 +1050,78 @@ TabuSearch::intra_route_exchanges(const Solution& solution,
     Routes new_routes;
     new_routes.reserve(solution.routes.size());
 
-    int improvement = 0;
-
     for (const auto& route : solution.routes) {
         Route route_wip = route;
         const auto original_cost = cost_function_f_s(route.route_excess, relaxation_params);
-        for (const auto& request : route.requests) {
+
+        // randomize the order
+        const auto route_size = route.requests.size();
+        auto n = 0;
+        std::vector<size_t> request_idxs(route_size);
+        std::ranges::generate(request_idxs, [&n]() mutable { return n++; });
+        std::random_device r;
+        std::default_random_engine e1(r());
+        std::shuffle(request_idxs.begin(), request_idxs.end(), e1);
+
+        for (const auto& request_idx : request_idxs) {
+            const auto& request = route.requests[request_idx];
             // remove nodes from_route
             route_wip.nodes.erase(std::remove_if(
                 route_wip.nodes.begin(), route_wip.nodes.end(),
                 [request](const Node* element) {
                     return element->request_id == request.id;
                 }), route_wip.nodes.end());
-            const auto& pickup_node = darproblem_.nodes[request.pickup_node_idx];
+            const auto& pickup_node = *request.pickup_node;
 
             // if the pickup node isn't critical, the dropoff is critical
             auto new_wip_route = is_critical(pickup_node, darproblem_.planning_horizon)
-                ? spi_critical_pickup(route_wip, request, relaxation_params)
-                : spi_critical_dropoff(route_wip, request, relaxation_params);
+                ? spi_critical_pickup(route_wip, request_idx, relaxation_params)
+                : spi_critical_dropoff(route_wip, request_idx, relaxation_params);
             route_wip = new_wip_route;
         }
-        const auto new_cost = cost_function_f_s(route_wip.route_excess, relaxation_params);
-        improvement += original_cost > new_cost
-            ? 1
-            : -1;
-        if (new_cost < original_cost) {
-            new_routes.push_back(route_wip);
-        }
-        else {
-            new_routes.push_back(route);
-        }
-
     }
 
-    Solution new_solution{ new_routes, solution.penalty_map };
-    new_solution.attribute_added = solution.attribute_added;
-    new_solution.attribute_removed = solution.attribute_removed;
-    const auto old_solution_cost = solution_cost(solution, relaxation_params);
+    Solution new_solution{ new_routes, solution.penalty_map, solution.attribute_added, solution.attribute_removed };
+
     const auto new_solution_cost = solution_cost(new_solution, relaxation_params);
 
-    //const auto fbs_old_cost = find_best_solution({ solution }, relaxation_params, {solution, old_solution_cost.total_cost});
-
-    //const auto fbs_new_cost = find_best_solution({ new_solution }, relaxation_params, {new_solution, new_solution_cost.total_cost});
     return { new_solution, new_solution_cost };
 }
 
+void TabuSearch::adjust_relaxation_params(RelaxationParams& relaxation_params, const SolutionCost& solution_cost)
+{
+    const auto relaxation_factor = 1 + relaxation_params.delta;
+    if (solution_cost.total_load_excess != 0) {
 
-//std::pair<Solution, SolutionCost>
-//TabuSearch::intra_route_exchanges(const Solution& solution,
-//    const RelaxationParams& relaxation_params)
-//{
-//    Routes new_routes;
-//    new_routes.reserve(solution.routes.size());
-//
-//    for (const auto& route : solution.routes) {
-//        std::list route_list(route.nodes.cbegin(), route.nodes.cend());
-//        auto current_node = route_list.begin();
-//        RouteExcess best_route_excess{};
-//        double best_route_cost = std::numeric_limits<double>::max();
-//
-//        //new_routes.push_back());
-//    }
-//    Solution new_solution{ new_routes, solution.penalty_map };
-//    return { new_solution, solution_cost(new_solution, relaxation_params) };
-//}
+        relaxation_params.load_alpha *= relaxation_factor;
+    }
+    else {
+        relaxation_params.load_alpha /= relaxation_factor;
+    }
+
+    if (solution_cost.total_duration_excess != 0) {
+        relaxation_params.duration_beta *= relaxation_factor;
+    }
+    else {
+        relaxation_params.duration_beta /= relaxation_factor;
+    }
+
+    if (solution_cost.total_time_window_excess != 0) {
+        relaxation_params.time_window_gamma *= relaxation_factor;
+    }
+    else {
+        relaxation_params.time_window_gamma /= relaxation_factor;
+    }
+
+    if (relaxation_params.ride_time_tau != 0) {
+        relaxation_params.ride_time_tau *= relaxation_factor;
+    }
+    else {
+        relaxation_params.ride_time_tau /= relaxation_factor;
+    }
+
+    if (std::fetestexcept(FE_OVERFLOW)) {
+        relaxation_params = RelaxationParams{};
+        std::feclearexcept(FE_OVERFLOW);
+    }
+}

@@ -17,29 +17,33 @@ public:
     * 
     * @
     */
-    explicit DARProblem(const std::vector<Node>& nodes, const uint16_t vehicles_count,
+    explicit DARProblem(const vector<Node>& nodes_in, const uint16_t vehicles_count,
         const uint16_t requests_count, const uint16_t vehicle_cap,
         const uint16_t max_ride_time, const double plan_horizon)
-        : nodes(nodes), distances(init_distance(nodes)),
+        : nodes(nodes_in), distances(init_distance(nodes)),
         number_of_vehicles(vehicles_count), number_of_requests(requests_count),
         vehicle_capacity(vehicle_cap), maximum_ride_time(max_ride_time),
-        planning_horizon(plan_horizon) {};
+        planning_horizon(plan_horizon), requests(init_requests(nodes)) {};
 
 public:
-    const std::vector<Node> nodes;
+    const vector<Node> nodes;
     const Distances distances;
     const uint16_t number_of_vehicles;
     const uint16_t number_of_requests;
     const uint16_t vehicle_capacity;
     const uint16_t maximum_ride_time;
     const double planning_horizon;
+    const vector<Request> requests;
 
 private:
     static double
         distance(const double& x1, const double& y1, const double& x2, const double& y2);
 
     static Distances
-        init_distance(const std::vector<Node>& nodes);
+        init_distance(const vector<Node>& nodes);
+
+    static vector<Request>
+        init_requests(const vector<Node>& nodes);
 
 };
 

@@ -25,3 +25,18 @@ Distances DARProblem::init_distance(const std::vector<Node>& nodes) {
     }
     return distances;
 }
+
+vector<Request> DARProblem::init_requests(const vector<Node>& nodes)
+{
+    const size_t midpoint = (nodes.size() / 2) - 1;
+    vector<Request> requests;
+    requests.reserve(midpoint);
+    
+    // 0 is depot
+    for (int i = 1; i < midpoint; ++i) {
+        const Node* pickup_node = &nodes[i];
+        const Node* dropoff_node = &nodes[i + midpoint];
+        requests.emplace_back(pickup_node->request_id, pickup_node, dropoff_node);
+    }
+    return requests;
+}

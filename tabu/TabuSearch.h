@@ -19,7 +19,7 @@ public:
         const double planning_horizon, const double tabu_duration,
         const double penalty_lambda, DARProblem darproblem)
         : tabu_duration_theta_(tabu_duration),
-        penalty_lambda_(penalty_lambda), darproblem_(std::move(darproblem)),
+        penalty_lambda_(penalty_lambda), darproblem_(move(darproblem)),
         tabu_list_(TabuList()) {};
 
     SolutionResult search(int max_iterations);
@@ -27,9 +27,9 @@ public:
 private:
     double tabu_duration_theta_;
     double penalty_lambda_;
-    TabuList tabu_list_;
     const DARProblem darproblem_;
-
+    TabuList tabu_list_;
+    PenaltyMap penalty_map_;
     uint64_t number_of_attributes_{ 0 };
     double lambda_x_attributes_{ 0 };
 
@@ -80,7 +80,8 @@ private:
         route_cost(const NodeVector& nodes) const;
 
     [[nodiscard]] SolutionCost
-        solution_cost(const Solution& solution, const RelaxationParams& relaxation_params) const;
+        solution_cost(const Solution& solution, const RelaxationParams& relaxation_params,
+            const double previous_cost) const;
 
     [[nodiscard]] Solution
         apply_swap(const Solution& solution, const size_t& route_idx_1, const size_t& request_idx_1,
@@ -98,11 +99,10 @@ private:
             const uint64_t& current_iteration, const RelaxationParams& relaxation_params,
             const AspirationCriteria& aspiration_criteria, double current_cost);
 
-    void
-        add_spi_to_neighbourhood(const Solution& solution, TabuList& tabu_list,
+    [[nodiscard]] pair<Solution, SolutionCost>
+        spi_neighbourhood(const Solution& solution, TabuList& tabu_list,
             const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria,
-            double current_cost, const RelaxationParams& relaxation_params,
-            Neighbourhood& neighborhood);
+            double current_cost, const RelaxationParams& relaxation_params);
 
     void
         add_swap_to_neighbourhood(const Solution& solution, TabuList& tabu_list,
@@ -110,7 +110,7 @@ private:
             double current_cost, const RelaxationParams& relaxation_params,
             Neighbourhood& neighborhood);
 
-    [[nodiscard]] std::pair<RouteExcess, std::vector<NodeAttributes>>
+    [[nodiscard]] pair<RouteExcess, vector<NodeAttributes>>
         route_evaluation(const NodeVector& nodes) const;
 
     [[nodiscard]] bool
@@ -128,27 +128,27 @@ private:
      * @param end_node Node to finish calculating from
      */
     void
-        compute_node_costs(std::vector<NodeAttributes>& node_costs,
+        compute_node_costs(vector<NodeAttributes>& node_costs,
             const NodeVector& nodes, const double& D_0, const uint64_t& start_node, const uint64_t& end_node) const;
 
     void
-        compute_node_costs(std::vector<NodeAttributes>& node_costs,
+        compute_node_costs(vector<NodeAttributes>& node_costs,
             const NodeVector& nodes, const double& D_0, const uint64_t& start_node) const;
 
     void
-        compute_node_costs(std::vector<NodeAttributes>& node_costs,
+        compute_node_costs(vector<NodeAttributes>& node_costs,
             const NodeVector& nodes, const double& D_0) const;
 
     void
-        compute_node_costs(std::vector<NodeAttributes>& node_costs,
+        compute_node_costs(vector<NodeAttributes>& node_costs,
             const NodeVector& nodes) const;
 
     void
-        calculate_journey_times(std::vector<NodeAttributes>& node_costs,
-            robin_hood::unordered_flat_map<RequestId, std::pair<double, ptrdiff_t>>& journey_times,
+        calculate_journey_times(vector<NodeAttributes>& node_costs,
+            robin_hood::unordered_flat_map<RequestId, pair<double, ptrdiff_t>>& journey_times,
             const ptrdiff_t& start_pos) const;
 
-    [[nodiscard]] std::pair<Solution, SolutionCost>
+    [[nodiscard]] pair<Solution, SolutionCost>
         find_best_solution(const Neighbourhood& neighbourhood, const RelaxationParams& relaxation_params,
             const SolutionResult& previous_result) const;
 
@@ -190,22 +190,22 @@ private:
     inline void
         update_search_params(RelaxationParams& relaxation_params)
     {
-        std::random_device r;
-        std::mt19937_64 e1(r());
+        random_device r;
+        mt19937_64 e1(r());
 
         // update relaxation delta
-        std::uniform_real_distribution<> random_delta(0, 0.5);
+        uniform_real_distribution<> random_delta(0, 0.5);
         relaxation_params.delta = random_delta(e1);
 
         // update penalty lambda
-        std::uniform_real_distribution<> random_lambda(0, 0.015);
+        uniform_real_distribution<> random_lambda(0, 0.015);
         penalty_lambda_ = random_lambda(e1);
         update_lambda_x_attributes(penalty_lambda_);
 
         // update tabu duration theta
-        const double theta_max = 7.5 * std::log10(number_of_attributes_);
-        std::uniform_real_distribution<> random_theta(0, theta_max);
-        tabu_duration_theta_ = std::ceil(random_theta(e1));
+        const double theta_max = 7.5 * log10(number_of_attributes_);
+        uniform_real_distribution<double> random_theta(0, theta_max);
+        tabu_duration_theta_ = ceil(random_theta(e1));
     }
 
     inline void
@@ -214,7 +214,7 @@ private:
         lambda_x_attributes_ = lambda * sqrt(number_of_attributes_);
     }
 
-    [[nodiscard]] std::pair<Solution, SolutionCost>
+    [[nodiscard]] pair<Solution, SolutionCost>
         intra_route_exchanges(const Solution& solution,
             const RelaxationParams& relaxation_params);
 

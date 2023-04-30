@@ -7,11 +7,10 @@
 #ifndef TABU_TABUTYPES_H
 #define TABU_TABUTYPES_H
 
-#include <list>
 #include <vector>
-#include <memory>
-
 #include "robin_hood.h"
+
+using namespace std;
 
 enum MoveType { SPI, SWAP, MOVE };
 typedef uint64_t RequestId;
@@ -22,17 +21,17 @@ public:
     TabuKey(const RouteIndex& route, const RequestId& request)
         : key(init_key(route, request)) {};
 
-    std::string key;
+    string key;
 
     bool operator==(const TabuKey& rhs) {
         return key == rhs.key;
     }
 private:
 
-    inline static std::string init_key(const RouteIndex& route, const RequestId& request)
+    inline static string init_key(const RouteIndex& route, const RequestId& request)
     {
-        std::string k;
-        k += 'V' + std::to_string(route) + 'R' + std::to_string(request);
+        string k;
+        k += 'V' + to_string(route) + 'R' + to_string(request);
         return k;
     }
 };
@@ -40,7 +39,7 @@ private:
 struct TabuKeyHash {
     size_t operator()(const TabuKey& key) const
     {
-        return robin_hood::hash<std::string>()(key.key);
+        return robin_hood::hash<string>()(key.key);
     }
 };
 
@@ -54,8 +53,8 @@ typedef TabuKey PenaltyKey;
 typedef TabuKeyHash PenaltyKeyHash;
 typedef TabuKeyEquals PenaltyKeyEquals;
 
-typedef std::vector<std::vector<double>> Distances;
-//typedef std::tuple<i nt, RequestId> TabuKey;
+typedef vector<vector<double>> Distances;
+//typedef tuple<i nt, RequestId> TabuKey;
 
 typedef uint64_t TabuIteration;
 typedef unsigned int TimesAdded;
@@ -79,10 +78,10 @@ struct Node {
     double x;
     double y;
 };
-typedef std::vector<const Node*> NodeVector;
+typedef vector<const Node*> NodeVector;
 
 struct Request {
-    RequestId id;
+    const RequestId id;
 
     const Node* pickup_node;
     const Node* dropoff_node;
@@ -113,11 +112,11 @@ struct NodeAttributes {
 };
 
 struct JourneyMoveCost {
-    std::vector<NodeAttributes> node_costs;
+    vector<NodeAttributes> node_costs;
 };
 
 struct SolutionCost {
-    std::vector<RouteExcess> route_costs;
+    vector<RouteExcess> route_costs;
     RouteCost total_cost = 0;
     double raw_cost = 0;
     double duration = 0;
@@ -128,26 +127,25 @@ struct SolutionCost {
 };
 
 struct Route {
-    std::vector<Request> requests;
+    vector<const Request*> requests;
     NodeVector nodes;
-    std::vector<NodeAttributes> node_attributes;
+    vector<NodeAttributes> node_attributes;
     RouteExcess route_excess;
 };
 
-typedef std::vector<Route> Routes;
+typedef vector<Route> Routes;
 struct HistoryItem {
     PenaltyKey attribute_added{ 0,0 };
     PenaltyKey attribute_removed{ 0,0 };
 };
 struct Solution {
     Routes routes;
-    PenaltyMap penalty_map;
     PenaltyKey attribute_added{0,0};
     PenaltyKey attribute_removed{ 0,0 };
     bool swap = false;
 };
 
-typedef std::vector<Solution> Neighbourhood;
+typedef vector<Solution> Neighbourhood;
 
 
 struct RelaxationParams {

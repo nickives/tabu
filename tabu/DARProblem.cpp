@@ -1,10 +1,8 @@
-#include "DARProblem.h"
-
-#include <complex>
-
 //
 // Created by Nicholas Ives on 19/04/2023.
 //
+
+#include <complex>
 
 #include "DARProblem.h"
 #include "tabutypes.h"

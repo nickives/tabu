@@ -191,21 +191,31 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BlockingQueue.cpp" />
+    <ClCompile Include="BlockingSolutionQueue.cpp" />
     <ClCompile Include="DARProblem.cpp" />
     <ClCompile Include="InvalidSolutionException.cpp" />
+    <ClCompile Include="BlockingMoveQueue.cpp" />
     <ClCompile Include="ProblemReader.cpp" />
     <ClCompile Include="SolutionPrinter.cpp" />
+    <ClCompile Include="SPIWorker.cpp" />
     <ClCompile Include="tabu.cpp" />
     <ClCompile Include="TabuSearch.cpp" />
+    <ClCompile Include="WorkerThread.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BlockingQueue.h" />
+    <ClInclude Include="BlockingSolutionQueue.h" />
     <ClInclude Include="DARProblem.h" />
     <ClInclude Include="InvalidSolutionException.h" />
+    <ClInclude Include="BlockingMoveQueue.h" />
     <ClInclude Include="ProblemReader.h" />
     <ClInclude Include="robin_hood.h" />
     <ClInclude Include="SolutionPrinter.h" />
+    <ClInclude Include="SPIWorker.h" />
     <ClInclude Include="TabuSearch.h" />
     <ClInclude Include="tabutypes.h" />
+    <ClInclude Include="WorkerThread.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="readme.md" />

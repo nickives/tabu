@@ -11,7 +11,10 @@
 #include <random>
 #include <tuple>
 #include <cfenv>
+#include <thread>
+#include <boost/range/irange.hpp>
 
+#include "SPIWorker.h"
 #include "robin_hood.h"
 #include "TabuSearch.h"
 #include "InvalidSolutionException.h"
@@ -145,15 +148,25 @@ SolutionResult TabuSearch::search(int max_iterations) {
     //Solution previous_solution = best_valid_solution;
     //SolutionCost previous_solution_cost = current_solution_cost;
 
-    cout << "Initial Solution: " << endl;
+    std::cout << "Initial Solution: " << endl;
     SolutionPrinter::print_solution(current_solution);
-    cout << "Total Cost: " << best_valid_cost.total_cost << endl;
+    std::cout << "Total Cost: " << best_valid_cost.total_cost << endl;
     //cout << "Iterations: " << max_iterations << endl;
 
     int better = 0;
     int worse = 0;
     int same = 0;
     SolutionCost average_costs{};
+
+    const int thread_count = 16;
+    vector<thread> thread_vector;
+    BlockingMoveQueue move_q{ {current_solution, relaxation_params} };
+    BlockingSolutionQueue solution_q;
+
+    for (int i = 0; i < thread_count; ++i) {
+        SPIWorker worker{ *this, move_q, solution_q };
+        thread_vector.emplace_back(worker);
+    }
 
     // start at 1 so we don't go straight into intra-route optimisations
     for (uint64_t iteration = 1; iteration <= max_iterations; ++iteration) {
@@ -171,8 +184,12 @@ SolutionResult TabuSearch::search(int max_iterations) {
         const auto current_solution_tuple = find_best_solution(neighbourhood, relaxation_params,
             { current_solution, current_solution_cost.total_cost });*/
 
-        const auto current_solution_tuple = spi_neighbourhood(current_solution, tabu_list_,
-            iteration, aspiration_criteria, current_solution_cost.total_cost, relaxation_params);
+        //const auto current_solution_tuple = spi_neighbourhood(current_solution, tabu_list_,
+        //    iteration, aspiration_criteria, current_solution_cost.total_cost, relaxation_params);
+
+        const auto current_solution_tuple = send_moves_to_workers(current_solution, tabu_list_,
+            iteration, aspiration_criteria, current_solution_cost.total_cost, relaxation_params,
+            move_q, solution_q);
 
         // DEBUG STUFF - REMOVE AT SOME POINT
         //previous_solution_cost = current_solution_cost;
@@ -257,21 +274,29 @@ SolutionResult TabuSearch::search(int max_iterations) {
     }
 
     Solution return_solution = best_valid_solution;
-    cout << endl;
-    cout << "Better: " << better << endl;
-    cout << "Same  : " << same << endl;
-    cout << "Worse : " << worse << endl;
+    std::cout << endl;
+    std::cout << "Better: " << better << endl;
+    std::cout << "Same  : " << same << endl;
+    std::cout << "Worse : " << worse << endl;
 
     average_costs.total_duration_excess /= max_iterations;
     const double avg_load_excess = static_cast<double>(average_costs.total_load_excess) / static_cast<double>(max_iterations);
     average_costs.total_ride_time_excess /= max_iterations;
     average_costs.total_time_window_excess /= max_iterations;
 
-    cout << "Avg Duration Excess   : " << average_costs.total_duration_excess << endl;
-    cout << "Avg Load Excess       :" << avg_load_excess << endl;
-    cout << "Avg Ride Time Excess  :" << average_costs.total_ride_time_excess << endl;
-    cout << "Avg Time Window Excess:" << average_costs.total_time_window_excess << endl;
+    std::cout << "Avg Duration Excess   : " << average_costs.total_duration_excess << endl;
+    std::cout << "Avg Load Excess       :" << avg_load_excess << endl;
+    std::cout << "Avg Ride Time Excess  :" << average_costs.total_ride_time_excess << endl;
+    std::cout << "Avg Time Window Excess:" << average_costs.total_time_window_excess << endl;
 
+    for (int i : boost::irange(0, thread_count)) {
+        move_q.put(QuitMove());
+    }
+
+    // clean up threads
+    for (auto& thread : thread_vector) {
+        thread.join();
+    }
 
     return { return_solution, best_valid_cost.total_cost };
 }
@@ -576,12 +601,6 @@ void TabuSearch::calculate_journey_times(vector<NodeAttributes>& node_costs,
 
 void
 TabuSearch::compute_node_costs(vector<NodeAttributes>& node_costs,
-    const NodeVector& nodes) const {
-    compute_node_costs(node_costs, nodes, nodes[0]->time_window_start);
-}
-
-void
-TabuSearch::compute_node_costs(vector<NodeAttributes>& node_costs,
     const NodeVector& nodes, const double& D_0) const {
     compute_node_costs(node_costs, nodes, D_0, 0);
 }
@@ -697,6 +716,65 @@ pair<Solution, SolutionCost> TabuSearch::spi_neighbourhood(
                 }
             }
         }
+    }
+
+    return { best_solution, best_solution_cost };
+}
+
+pair<Solution, SolutionCost>
+TabuSearch::send_moves_to_workers(
+    const Solution& solution, TabuList& tabu_list, const uint64_t& current_iteration,
+    const AspirationCriteria& aspiriation_criteria, double current_cost,
+    const RelaxationParams& relaxation_params,
+    BlockingMoveQueue& move_q, BlockingSolutionQueue& solution_q)
+{
+    const auto routes_size = solution.routes.size();
+    Solution best_solution{};
+    SolutionCost best_solution_cost{};
+    best_solution_cost.total_cost = numeric_limits<double>::max();
+
+    uint64_t solutions_sent = 0;
+
+    pair<Solution, RelaxationParams> pair = make_pair(solution, relaxation_params);
+
+    move_q.setSolutionPair(pair);
+
+    for (size_t from_route = 0; from_route < routes_size; ++from_route) {
+        for (size_t to_route = 0; to_route < routes_size; ++to_route) {
+            if (from_route == to_route)
+            {
+                continue;
+            }
+            for (size_t request_idx = 0; request_idx < solution.routes[from_route].requests.size(); ++request_idx) {
+                const auto& request = solution.routes[from_route].requests[request_idx];
+                // Don't try to add to same route
+                const TabuKey to_key{ to_route, request->id };
+
+                // if it's tabu
+                if (is_tabu(to_key, tabu_list, current_iteration, tabu_duration_theta_,
+                    aspiriation_criteria, current_cost))
+                {
+                    continue;
+                }
+                const TabuKey from_key{ from_route, request->id };
+
+                move_q.put(move(SPIMove{ from_route, to_route, request_idx, to_key, from_key }));
+
+                ++solutions_sent;
+            }
+        }
+    }
+
+    while (solutions_sent != 0) {
+        Solution candidate_solution = solution_q.get();
+
+        const auto candidate_solution_cost = solution_cost(candidate_solution,
+            relaxation_params, current_cost);
+        if (candidate_solution_cost.total_cost < best_solution_cost.total_cost) {
+            best_solution_cost = candidate_solution_cost;
+            best_solution = candidate_solution;
+        }
+        --solutions_sent;
     }
 
     return { best_solution, best_solution_cost };

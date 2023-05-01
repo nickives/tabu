@@ -113,7 +113,7 @@ int main() {
         {21, 0, 0, 0, 0, 1400, 0, 0}
     };
 
-    const int max_iterations = 10000;
+    const int max_iterations = 100;
     const int max_vehicle_load = 6;
     const int planning_horizon = 1000;
     const int max_ride_time = 90;
@@ -126,7 +126,7 @@ int main() {
         planning_horizon
     };
 
-    const std::string filename{ "C:\\Users\\nicki\\source\\repos\\nickives\\tabu\\tabu\\data\\tabu\\pr01" };
+    const std::string filename{ "C:\\Users\\nicki\\source\\repos\\nickives\\tabu\\tabu\\data\\tabu\\pr04" };
 
     DARProblem from_file = ProblemReader::read(filename);
 
@@ -149,7 +149,10 @@ int main() {
         auto time_diff = end_time - start_time;
         std::cout << "Best solution cost: " << best_solution.cost << std::endl;
         SolutionPrinter::print_solution(best_solution.solution);
-        std::cout << "Running time: " << time_diff << std::endl;
+        auto time_diff_minutes = std::chrono::duration_cast<std::chrono::minutes>(time_diff);
+        auto time_diff_seconds = std::chrono::duration_cast<std::chrono::seconds>(time_diff);
+        auto time_diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(time_diff);
+        std::cout << "Running time: " << time_diff_minutes << ":" << time_diff_seconds << ":" << time_diff_ms << std::endl;
     }
     catch (const std::bad_alloc& e) {
         std::cout << e.what() << std::endl;

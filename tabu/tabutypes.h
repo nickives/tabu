@@ -8,11 +8,12 @@
 #define TABU_TABUTYPES_H
 
 #include <vector>
+#include <variant>
 #include "robin_hood.h"
 
 using namespace std;
 
-enum MoveType { SPI, SWAP, MOVE };
+enum MoveType { SPI, SWAP, QUIT };
 typedef uint64_t RequestId;
 typedef uint64_t RouteIndex;
 
@@ -160,5 +161,27 @@ struct SolutionResult {
     Solution solution;
     RouteCost cost;
 };
+
+struct SPIMove {
+    size_t from_route_idx;
+    size_t to_route_idx;
+    size_t request_idx;
+    TabuKey attribute_added;
+    TabuKey attribute_removed;
+};
+
+struct SwapMove {
+    size_t from_route_idx;
+    size_t to_route_idx;
+    size_t request_idx;
+    TabuKey attribute_added;
+    TabuKey attribute_removed;
+};
+
+struct QuitMove {
+
+};
+
+typedef variant<SPIMove, QuitMove> MoveVariant;
 
 #endif //TABU_TABUTYPES_H

@@ -12,6 +12,8 @@
 
 #include "tabutypes.h"
 #include "DARProblem.h"
+#include "BlockingMoveQueue.h"
+#include "BlockingSolutionQueue.h"
 
 class TabuSearch {
 public:
@@ -24,14 +26,39 @@ public:
 
     SolutionResult search(int max_iterations);
 
+    const DARProblem darproblem_;
+
 private:
     double tabu_duration_theta_;
     double penalty_lambda_;
-    const DARProblem darproblem_;
     TabuList tabu_list_;
     PenaltyMap penalty_map_;
     uint64_t number_of_attributes_{ 0 };
     double lambda_x_attributes_{ 0 };
+
+
+public:
+
+    /**
+     * identify critical node - e_i != 0 or l_i != T
+     */
+    [[nodiscard]] inline static bool
+        is_critical(const Node& node, const double planning_horizon)
+    {
+        return (node.time_window_start != 0)
+            || (node.time_window_end < planning_horizon);
+    }
+
+    [[nodiscard]] pair<RouteExcess, vector<NodeAttributes>>
+        route_evaluation(const NodeVector& nodes) const;
+
+    Route
+        spi_critical_pickup(const Route& route, const size_t& request_idx,
+            const RelaxationParams& relaxation_params) const;
+
+    Route
+        spi_critical_dropoff(const Route& route, const size_t& request_idx,
+            const RelaxationParams& relaxation_params) const;
 
 private:
     static inline bool
@@ -63,18 +90,9 @@ private:
         return false;
     }
 
-    /**
-    * identify critical node - e_i != 0 or l_i != T
-    */
-    [[nodiscard]] inline static bool
-        is_critical(const Node& node, const double planning_horizon)
-    {
-        return (node.time_window_start != 0)
-            || (node.time_window_end < planning_horizon);
-    }
-
     [[nodiscard]] double
         distance(const NodeId& node_idx1, const NodeId& node_idx2) const;
+
 
     [[nodiscard]] RouteExcess
         route_cost(const NodeVector& nodes) const;
@@ -104,14 +122,17 @@ private:
             const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria,
             double current_cost, const RelaxationParams& relaxation_params);
 
+    [[nodiscard]] pair<Solution, SolutionCost>
+        send_moves_to_workers(const Solution& solution, TabuList& tabu_list,
+            const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria,
+            double current_cost, const RelaxationParams& relaxation_params,
+            BlockingMoveQueue& move_q, BlockingSolutionQueue& solution_q);
+
     void
         add_swap_to_neighbourhood(const Solution& solution, TabuList& tabu_list,
             const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria,
             double current_cost, const RelaxationParams& relaxation_params,
             Neighbourhood& neighborhood);
-
-    [[nodiscard]] pair<RouteExcess, vector<NodeAttributes>>
-        route_evaluation(const NodeVector& nodes) const;
 
     [[nodiscard]] bool
         is_feasible(const SolutionCost& solution_cost) const;
@@ -139,9 +160,6 @@ private:
         compute_node_costs(vector<NodeAttributes>& node_costs,
             const NodeVector& nodes, const double& D_0) const;
 
-    void
-        compute_node_costs(vector<NodeAttributes>& node_costs,
-            const NodeVector& nodes) const;
 
     void
         calculate_journey_times(vector<NodeAttributes>& node_costs,
@@ -171,14 +189,6 @@ private:
 
     static double
         cost_function_f_s(const RouteExcess& route_excess, const RelaxationParams& relaxation_params);
-
-    Route
-        spi_critical_pickup(const Route& route, const size_t& request_idx,
-            const RelaxationParams& relaxation_params) const;
-
-    Route
-        spi_critical_dropoff(const Route& route, const size_t& request_idx,
-            const RelaxationParams& relaxation_params) const;
 
     /**
     * Update searc params

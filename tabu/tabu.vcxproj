@@ -204,6 +204,7 @@
     <ClCompile Include="WorkerThread.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="allocator.h" />
     <ClInclude Include="BlockingQueue.h" />
     <ClInclude Include="BlockingSolutionQueue.h" />
     <ClInclude Include="DARProblem.h" />
@@ -218,6 +219,7 @@
     <ClInclude Include="WorkerThread.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="LICENSE" />
     <None Include="readme.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

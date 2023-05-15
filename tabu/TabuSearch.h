@@ -39,26 +39,14 @@ private:
 
 public:
 
-    /**
-     * identify critical node - e_i != 0 or l_i != T
-     */
-    [[nodiscard]] inline static bool
-        is_critical(const Node& node, const double planning_horizon)
-    {
-        return (node.time_window_start != 0)
-            || (node.time_window_end < planning_horizon);
-    }
+    [[nodiscard]] Solution
+        apply_single_paired_insertion(const Solution& solution, const size_t& from_route_idx, const size_t& request_idx,
+            const size_t& to_route_idx, const RelaxationParams& relaxation_params) const;
 
-    [[nodiscard]] pair<RouteExcess, vector<NodeAttributes>>
-        route_evaluation(const NodeVector& nodes) const;
-
-    Route
-        spi_critical_pickup(const Route& route, const size_t& request_idx,
-            const RelaxationParams& relaxation_params) const;
-
-    Route
-        spi_critical_dropoff(const Route& route, const size_t& request_idx,
-            const RelaxationParams& relaxation_params) const;
+    [[nodiscard]] Solution
+        apply_swap(const Solution& solution, const size_t& route_idx_1,
+            const size_t& request_idx_1, const size_t& route_idx_2,
+            const size_t& request_idx_2, const RelaxationParams& relaxation_params) const;
 
 private:
     static inline bool
@@ -95,22 +83,14 @@ private:
 
 
     [[nodiscard]] RouteExcess
-        route_cost(const NodeVector& nodes) const;
+        route_cost(const NodePtrVector& nodes) const;
 
     [[nodiscard]] SolutionCost
         solution_cost(const Solution& solution, const RelaxationParams& relaxation_params,
             const double previous_cost) const;
 
-    [[nodiscard]] Solution
-        apply_swap(const Solution& solution, const size_t& route_idx_1, const size_t& request_idx_1,
-            const size_t& route_idx_2, const size_t& request_idx_2, const RelaxationParams& relaxation_params);
-
     static Solution
         apply_two_opt(const Solution& solution, const int& route_idx, const int& i, const int& j);
-
-    [[nodiscard]] Solution
-        apply_single_paired_insertion(const Solution& solution, const size_t& from_route_idx, const size_t& request_idx,
-            const size_t& to_route_idx, const RelaxationParams& relaxation_params) const;
 
     Neighbourhood
         generate_neighborhood(const Solution& solution, TabuList& tabu_list,
@@ -127,6 +107,16 @@ private:
             const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria,
             double current_cost, const RelaxationParams& relaxation_params,
             BlockingMoveQueue& move_q, BlockingSolutionQueue& solution_q);
+
+    uint64_t send_spi_to_workers(const size_t& routes_size, const Solution& solution,
+        TabuList& tabu_list, const uint64_t& current_iteration,
+        const AspirationCriteria& aspiriation_criteria, double current_cost,
+        BlockingMoveQueue& move_q);
+
+    uint64_t send_swap_to_workers(const size_t& routes_size, const Solution& solution,
+        TabuList& tabu_list, const uint64_t& current_iteration,
+        const AspirationCriteria& aspiriation_criteria, double current_cost,
+        BlockingMoveQueue& move_q);
 
     void
         add_swap_to_neighbourhood(const Solution& solution, TabuList& tabu_list,
@@ -149,20 +139,20 @@ private:
      * @param end_node Node to finish calculating from
      */
     void
-        compute_node_costs(vector<NodeAttributes>& node_costs,
-            const NodeVector& nodes, const double& D_0, const uint64_t& start_node, const uint64_t& end_node) const;
+        compute_node_costs(NodeAttributeVector& node_costs,
+            const NodePtrVector& nodes, const double& D_0, const uint64_t& start_node, const uint64_t& end_node) const;
 
     void
-        compute_node_costs(vector<NodeAttributes>& node_costs,
-            const NodeVector& nodes, const double& D_0, const uint64_t& start_node) const;
+        compute_node_costs(NodeAttributeVector& node_costs,
+            const NodePtrVector& nodes, const double& D_0, const uint64_t& start_node) const;
 
     void
-        compute_node_costs(vector<NodeAttributes>& node_costs,
-            const NodeVector& nodes, const double& D_0) const;
+        compute_node_costs(NodeAttributeVector& node_costs,
+            const NodePtrVector& nodes, const double& D_0) const;
 
 
     void
-        calculate_journey_times(vector<NodeAttributes>& node_costs,
+        calculate_journey_times(NodeAttributeVector& node_costs,
             robin_hood::unordered_flat_map<RequestId, pair<double, ptrdiff_t>>& journey_times,
             const ptrdiff_t& start_pos) const;
 
@@ -232,6 +222,26 @@ private:
         adjust_relaxation_params(RelaxationParams& relaxation_params,
             const SolutionCost& solution_cost);
 
+    /**
+    * identify critical node - e_i != 0 or l_i != T
+    */
+    [[nodiscard]] inline static bool
+        is_critical(const Node& node, const double planning_horizon)
+    {
+        return (node.time_window_start != 0)
+            || (node.time_window_end < planning_horizon);
+    }
+
+    [[nodiscard]] pair<RouteExcess, NodeAttributeVector>
+        route_evaluation(const NodePtrVector& nodes) const;
+
+    Route
+        spi_critical_pickup(const Route& route, const size_t& request_idx,
+            const RelaxationParams& relaxation_params) const;
+
+    Route
+        spi_critical_dropoff(const Route& route, const size_t& request_idx,
+            const RelaxationParams& relaxation_params) const;
 };
 
 

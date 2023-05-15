@@ -113,7 +113,7 @@ int main() {
         {21, 0, 0, 0, 0, 1400, 0, 0}
     };
 
-    const int max_iterations = 100;
+    const int max_iterations = 10000;
     const int max_vehicle_load = 6;
     const int planning_horizon = 1000;
     const int max_ride_time = 90;
@@ -126,7 +126,7 @@ int main() {
         planning_horizon
     };
 
-    const std::string filename{ "C:\\Users\\nicki\\source\\repos\\nickives\\tabu\\tabu\\data\\tabu\\pr04" };
+    const std::string filename{ "C:\\Users\\nicki\\source\\repos\\nickives\\tabu\\tabu\\data\\tabu\\pr10" };
 
     DARProblem from_file = ProblemReader::read(filename);
 

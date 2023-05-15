@@ -14,17 +14,16 @@ public:
 	SPIWorker(const TabuSearch& ts, BlockingMoveQueue& mq, BlockingSolutionQueue& sq)
 		: ts_(ts), move_q_(mq), solution_q_(sq)  {};
 
-	[[nodiscard]] Solution
-		apply_single_paired_insertion(const Solution& solution, const size_t& from_route_idx, const size_t& request_idx,
-			const size_t& to_route_idx, const RelaxationParams& relaxation_params) const;
-
 	void operator()();
 
 private:
 	const TabuSearch& ts_;
 	BlockingMoveQueue& move_q_;
 	BlockingSolutionQueue& solution_q_;
+	bool running_ = true;
 
+private:
+	void quit() { running_ = false; }
 };
 
 #endif // TABU_SPIWORKER_H

@@ -9,6 +9,8 @@
 
 #include <vector>
 #include <variant>
+#include <boost/pool/pool_alloc.hpp>
+#include <memory_resource>
 #include "robin_hood.h"
 
 using namespace std;
@@ -55,13 +57,9 @@ typedef TabuKeyHash PenaltyKeyHash;
 typedef TabuKeyEquals PenaltyKeyEquals;
 
 typedef vector<vector<double>> Distances;
-//typedef tuple<i nt, RequestId> TabuKey;
 
 typedef uint64_t TabuIteration;
 typedef unsigned int TimesAdded;
-
-//typedef robin_hood::pair<int, int> TabuKey;
-//typedef robin_hood::pair<int, int> PenaltyKey;
 
 typedef robin_hood::unordered_flat_map<PenaltyKey, TimesAdded, PenaltyKeyHash, PenaltyKeyEquals> PenaltyMap;
 typedef robin_hood::unordered_flat_map<TabuKey, TabuIteration, TabuKeyHash, TabuKeyEquals> TabuList;
@@ -79,7 +77,19 @@ struct Node {
     double x;
     double y;
 };
-typedef vector<const Node*> NodeVector;
+
+    
+
+//template <typename T>
+//using TabuPoolAllocator = boost::pool_allocator<
+//    T, boost::default_user_allocator_new_delete, std::mutex, 65536, 65536>;
+//
+//template <typename T>
+//using TabuFastPoolAllocator = boost::fast_pool_allocator<
+//    T, boost::default_user_allocator_new_delete, std::mutex, 65536, 65536>;
+
+typedef vector<const Node*> NodePtrVector;
+typedef list<const Node*> NodePtrList;
 
 struct Request {
     const RequestId id;
@@ -95,6 +105,7 @@ struct Request {
         return !(rhs == *this);
     }
 };
+typedef vector<const Request*> RequestPtrVector;
 
 struct RouteExcess {
     int load_excess = 0;
@@ -103,6 +114,7 @@ struct RouteExcess {
     double duration = 0;
     double duration_excess = 0;
 };
+typedef vector<RouteExcess> RouteExcessVector;
 
 struct NodeAttributes {
     RequestId request_id{};
@@ -115,9 +127,10 @@ struct NodeAttributes {
 struct JourneyMoveCost {
     vector<NodeAttributes> node_costs;
 };
+typedef vector<NodeAttributes> NodeAttributeVector;
 
 struct SolutionCost {
-    vector<RouteExcess> route_costs;
+    RouteExcessVector route_costs;
     RouteCost total_cost = 0;
     double raw_cost = 0;
     double duration = 0;
@@ -128,9 +141,9 @@ struct SolutionCost {
 };
 
 struct Route {
-    vector<const Request*> requests;
-    NodeVector nodes;
-    vector<NodeAttributes> node_attributes;
+    RequestPtrVector requests;
+    NodePtrVector nodes;
+    NodeAttributeVector node_attributes;
     RouteExcess route_excess;
 };
 
@@ -171,17 +184,18 @@ struct SPIMove {
 };
 
 struct SwapMove {
-    size_t from_route_idx;
-    size_t to_route_idx;
-    size_t request_idx;
-    TabuKey attribute_added;
-    TabuKey attribute_removed;
+    size_t route_1_idx;
+    size_t route_2_idx;
+    size_t request_1_idx;
+    size_t request_2_idx;
+    TabuKey attribute_1;
+    TabuKey attribute_2;
 };
 
 struct QuitMove {
 
 };
 
-typedef variant<SPIMove, QuitMove> MoveVariant;
+typedef variant<SPIMove, SwapMove, QuitMove> MoveVariant;
 
 #endif //TABU_TABUTYPES_H

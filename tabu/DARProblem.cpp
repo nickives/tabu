@@ -32,7 +32,7 @@ vector<Request> DARProblem::init_requests(const vector<Node>& nodes)
     requests.reserve(midpoint);
     
     // 0 is depot
-    for (int i = 1; i < midpoint; ++i) {
+    for (int i = 1; i <= midpoint; ++i) {
         const Node* pickup_node = &nodes[i];
         const Node* dropoff_node = &nodes[i + midpoint];
         requests.emplace_back(pickup_node->request_id, pickup_node, dropoff_node);

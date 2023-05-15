@@ -26,16 +26,19 @@ public:
         vehicle_capacity(vehicle_cap), maximum_ride_time(max_ride_time),
         planning_horizon(plan_horizon), requests(init_requests(nodes)), path(f_path) {};
 
+
+    //DARProblem(DARProblem&& o) noexcept;
+
 public:
-    const vector<Node> nodes;
-    const Distances distances;
-    const uint16_t number_of_vehicles;
-    const uint16_t number_of_requests;
-    const uint16_t vehicle_capacity;
-    const uint16_t maximum_ride_time;
-    const double planning_horizon;
-    const vector<Request> requests;
-    const filesystem::path path;
+    vector<Node> nodes;
+    Distances distances;
+    uint16_t number_of_vehicles;
+    uint16_t number_of_requests;
+    uint16_t vehicle_capacity;
+    uint16_t maximum_ride_time;
+    double planning_horizon;
+    vector<Request> requests;
+    filesystem::path path;
 
 private:
     static double

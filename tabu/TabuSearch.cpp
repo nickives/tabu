@@ -176,7 +176,9 @@ SolutionResult TabuSearch::search(int max_iterations) {
         //    && iteration > 2) {
         //    cout << "LOL" << endl;
         //}
-        cout << "Current Iteration: " << iteration + 1 << '\r';
+        if (iteration % 100 == 0) {
+            cout << "Current Iteration: " << iteration + 1 << '\r';
+        }
 
         /*Neighbourhood neighbourhood = generate_neighborhood(current_solution, tabu_list_,
             iteration, relaxation_params, aspiration_criteria, current_solution_cost.total_cost);

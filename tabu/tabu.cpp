@@ -58,7 +58,7 @@ int main() {
         {21, 0, 0, 0, 0, 1400, 0, 0}
     };
 
-    const int max_iterations = 10000;
+    const int max_iterations = 100000;
     const int max_vehicle_load = 6;
     const int planning_horizon = 1000;
     const int max_ride_time = 90;
@@ -77,12 +77,13 @@ int main() {
 
     vector<DARProblem> problems;
     problems.reserve(500);
-    for (const auto& entry : std::filesystem::directory_iterator(darpPath)) {
-        problems.emplace_back(ProblemReader::readDarp(entry.path().string()));
-    }
     for (const auto& entry : std::filesystem::directory_iterator(tabuPath)) {
         problems.emplace_back(ProblemReader::readTabu(entry.path().string()));
     }
+    for (const auto& entry : std::filesystem::directory_iterator(darpPath)) {
+        problems.emplace_back(ProblemReader::readDarp(entry.path().string()));
+    }
+
     DARProblem from_file = ProblemReader::readTabu(filename);
 
     //TabuSearch ts(max_vehicle_load, planning_horizon, tabu_duration_theta, penalty_lambda, problem);

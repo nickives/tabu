@@ -7,6 +7,15 @@
 #include "DARProblem.h"
 #include "tabutypes.h"
 
+//DARProblem::DARProblem(DARProblem&& o) noexcept
+//    : nodes(o.nodes), distances(o.distances),
+//    number_of_vehicles(o.number_of_vehicles), number_of_requests(o.number_of_requests),
+//    vehicle_capacity(o.vehicle_capacity), maximum_ride_time(o.maximum_ride_time),
+//    planning_horizon(o.planning_horizon), path(o.path)
+//{
+//
+//}
+
 double DARProblem::distance(const double& x1, const double& y1, const double& x2, const double& y2) {
     return std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
 }
@@ -31,6 +40,13 @@ vector<Request> DARProblem::init_requests(const vector<Node>& nodes)
     vector<Request> requests;
     requests.reserve(midpoint);
     
+    vector<Node> thang;
+    thang.emplace_back(Node{5, 5, 5, 5, 5, 5, 5, 5});
+
+    const unique_ptr<vector<Node>> thing = make_unique<vector<Node>>(thang);
+
+    const auto result = thing.get()[0][0];
+
     // 0 is depot
     for (int i = 1; i <= midpoint; ++i) {
         const Node* pickup_node = &nodes[i];

@@ -1,0 +1,27 @@
+cmake_policy(SET CMP0076 NEW)
+target_sources(tabu
+    PRIVATE
+    BlockingMoveQueue.cpp
+    BlockingMoveQueue.h
+    BlockingQueue.cpp
+    BlockingQueue.h
+    BlockingSolutionQueue.cpp
+    BlockingSolutionQueue.h
+    DARProblem.cpp
+    DARProblem.h
+    InvalidSolutionException.cpp
+    InvalidSolutionException.h
+    ProblemReader.cpp
+    ProblemReader.h
+    robin_hood.h
+    SolutionFileWriter.cpp
+    SolutionFileWriter.h
+    SolutionPrinter.cpp
+    SolutionPrinter.h
+    SPIWorker.cpp
+    SPIWorker.h
+    tabu.cpp
+    TabuSearch.cpp
+    TabuSearch.h
+    tabutypes.h
+    )

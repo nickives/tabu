@@ -176,7 +176,7 @@ SolutionResult TabuSearch::search(int max_iterations) {
         //    && iteration > 2) {
         //    cout << "LOL" << endl;
         //}
-        //cout << "Current Iteration: " << iteration + 1 << '\r';
+        cout << "Current Iteration: " << iteration + 1 << '\r';
 
         /*Neighbourhood neighbourhood = generate_neighborhood(current_solution, tabu_list_,
             iteration, relaxation_params, aspiration_criteria, current_solution_cost.total_cost);
@@ -741,8 +741,8 @@ TabuSearch::send_moves_to_workers(
     solutions_sent += send_spi_to_workers(routes_size, solution, tabu_list,
         current_iteration, aspiriation_criteria, current_cost, move_q);
 
-    solutions_sent += send_swap_to_workers(routes_size, solution, tabu_list,
-        current_iteration, aspiriation_criteria, current_cost, move_q);
+    //solutions_sent += send_swap_to_workers(routes_size, solution, tabu_list,
+    //    current_iteration, aspiriation_criteria, current_cost, move_q);
 
     while (solutions_sent != 0) {
         Solution candidate_solution = solution_q.get();

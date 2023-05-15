@@ -7,6 +7,7 @@
 #ifndef TABU_DARPROBLEM_H
 #define TABU_DARPROBLEM_H
 
+#include <filesystem>
 #include "tabutypes.h"
 
 class DARProblem final {
@@ -17,13 +18,13 @@ public:
     * 
     * @
     */
-    explicit DARProblem(const vector<Node>& nodes_in, const uint16_t vehicles_count,
+    explicit DARProblem(vector<Node> nodes_in, const uint16_t vehicles_count,
         const uint16_t requests_count, const uint16_t vehicle_cap,
-        const uint16_t max_ride_time, const double plan_horizon)
+        const uint16_t max_ride_time, const double plan_horizon, const filesystem::path f_path)
         : nodes(nodes_in), distances(init_distance(nodes)),
         number_of_vehicles(vehicles_count), number_of_requests(requests_count),
         vehicle_capacity(vehicle_cap), maximum_ride_time(max_ride_time),
-        planning_horizon(plan_horizon), requests(init_requests(nodes)) {};
+        planning_horizon(plan_horizon), requests(init_requests(nodes)), path(f_path) {};
 
 public:
     const vector<Node> nodes;
@@ -34,6 +35,7 @@ public:
     const uint16_t maximum_ride_time;
     const double planning_horizon;
     const vector<Request> requests;
+    const filesystem::path path;
 
 private:
     static double

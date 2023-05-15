@@ -11,11 +11,12 @@ double DARProblem::distance(const double& x1, const double& y1, const double& x2
     return std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
 }
 
-Distances DARProblem::init_distance(const std::vector<Node>& nodes) {
-    Distances distances = Distances(nodes.size());
-    for (int i = 0; i < nodes.size(); ++i) {
-        distances[i] = std::vector<double>(nodes.size());
-        for (int j = 0; j < nodes.size(); ++j) {
+Distances DARProblem::init_distance(const vector<Node>& nodes) {
+    const auto nodes_size = nodes.size();
+    Distances distances = Distances(nodes_size);
+    for (int i = 0; i < nodes_size; ++i) {
+        distances[i] = std::vector<double>(nodes_size);
+        for (int j = 0; j < nodes_size; ++j) {
             const auto& node1 = nodes[i];
             const auto& node2 = nodes[j];
             distances[i][j] = distance(node1.x, node1.y, node2.x, node2.y);

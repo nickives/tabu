@@ -197,6 +197,7 @@
     <ClCompile Include="InvalidSolutionException.cpp" />
     <ClCompile Include="BlockingMoveQueue.cpp" />
     <ClCompile Include="ProblemReader.cpp" />
+    <ClCompile Include="SolutionFileWriter.cpp" />
     <ClCompile Include="SolutionPrinter.cpp" />
     <ClCompile Include="SPIWorker.cpp" />
     <ClCompile Include="tabu.cpp" />
@@ -212,6 +213,7 @@
     <ClInclude Include="BlockingMoveQueue.h" />
     <ClInclude Include="ProblemReader.h" />
     <ClInclude Include="robin_hood.h" />
+    <ClInclude Include="SolutionFileWriter.h" />
     <ClInclude Include="SolutionPrinter.h" />
     <ClInclude Include="SPIWorker.h" />
     <ClInclude Include="TabuSearch.h" />

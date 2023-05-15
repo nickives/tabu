@@ -7,6 +7,7 @@
 class ProblemReader
 {
 public:
-	static DARProblem read(const std::string& filename);
+	static DARProblem readTabu(const filesystem::path& filename);
+	static DARProblem readDarp(const filesystem::path& filename);
 };
 

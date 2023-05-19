@@ -169,33 +169,14 @@ SolutionResult TabuSearch::search(int max_iterations) {
 
     // start at 1 so we don't go straight into intra-route optimisations
     for (uint64_t iteration = 1; iteration <= max_iterations; ++iteration) {
-        //if ((current_solution.attribute_added == current_solution.attribute_removed
-        //    || (previous_solution.attribute_removed == current_solution.attribute_added)
-        //        && !current_solution.swap)
-        //    && iteration > 2) {
-        //    cout << "LOL" << endl;
-        //}
+
         if (iteration % 100 == 0) {
             cout << "Current Iteration: " << iteration + 1 << '\r';
         }
 
-        /*Neighbourhood neighbourhood = generate_neighborhood(current_solution, tabu_list_,
-            iteration, relaxation_params, aspiration_criteria, current_solution_cost.total_cost);
-
-        const auto current_solution_tuple = find_best_solution(neighbourhood, relaxation_params,
-            { current_solution, current_solution_cost.total_cost });*/
-
-        //const auto current_solution_tuple = spi_neighbourhood(current_solution, tabu_list_,
-        //    iteration, aspiration_criteria, current_solution_cost.total_cost, relaxation_params);
-
         const auto current_solution_tuple = send_moves_to_workers(current_solution, tabu_list_,
             iteration, aspiration_criteria, current_solution_cost.total_cost, relaxation_params,
             move_q, solution_q);
-
-        // DEBUG STUFF - REMOVE AT SOME POINT
-        //previous_solution_cost = current_solution_cost;
-        //previous_solution = current_solution;
-        // END DEBUG
 
         current_solution = get<Solution>(current_solution_tuple);
         current_solution_cost = get<SolutionCost>(current_solution_tuple);
@@ -732,16 +713,22 @@ TabuSearch::send_moves_to_workers(
 
     while (solutions_sent != 0) {
         Solution candidate_solution = solution_q.get();
-
-        satisfies_initial_constraints(candidate_solution);
-
+        --solutions_sent;
         const auto candidate_solution_cost = solution_cost(candidate_solution,
             relaxation_params, current_cost);
+
+        // don't add if tabu
+        if (is_tabu(candidate_solution.attribute_added, tabu_list, current_iteration, tabu_duration_theta_,
+            aspiriation_criteria, candidate_solution_cost.total_cost))
+        {
+            cout << "Tabu!" << endl;
+            continue;
+        }
+
         if (candidate_solution_cost.total_cost < best_solution_cost.total_cost) {
             best_solution_cost = candidate_solution_cost;
             best_solution = candidate_solution;
         }
-        --solutions_sent;
     }
 
     return { best_solution, best_solution_cost };
@@ -765,11 +752,11 @@ uint64_t TabuSearch::send_spi_to_workers(const size_t& routes_size,
                 const TabuKey to_key{ to_route, request->id };
 
                 // if it's tabu
-                if (is_tabu(to_key, tabu_list, current_iteration, tabu_duration_theta_,
-                    aspiriation_criteria, current_cost))
-                {
-                    continue;
-                }
+                //if (is_tabu(to_key, tabu_list, current_iteration, tabu_duration_theta_,
+                //    aspiriation_criteria, current_cost))
+                //{
+                //    continue;
+                //}
                 const TabuKey from_key{ from_route, request->id };
 
                 move_q.put(move(SPIMove{ from_route, to_route, request_idx, to_key, from_key }));

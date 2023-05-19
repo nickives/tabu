@@ -58,7 +58,7 @@ int main() {
         {21, 0, 0, 0, 0, 1400, 0, 0}
     };
 
-    const int max_iterations = 100000;
+    const int max_iterations = 10000;
     const int max_vehicle_load = 6;
     const int planning_horizon = 1000;
     const int max_ride_time = 90;

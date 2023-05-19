@@ -203,7 +203,7 @@ private:
         update_lambda_x_attributes(penalty_lambda_);
 
         // update tabu duration theta
-        const double theta_max = 7.5 * log10(number_of_attributes_);
+        const double theta_max = 7.5 * log10(darproblem_.nodes.size() - 2);
         uniform_real_distribution<double> random_theta(0, theta_max);
         tabu_duration_theta_ = ceil(random_theta(e1));
     }

@@ -156,7 +156,6 @@ SolutionResult TabuSearch::search(int max_iterations) {
     int better = 0;
     int worse = 0;
     int same = 0;
-    SolutionCost average_costs{};
 
     const int thread_count = 16;
     vector<thread> thread_vector;
@@ -209,11 +208,6 @@ SolutionResult TabuSearch::search(int max_iterations) {
             tabu_list_[current_solution.attribute_added] = iteration;
             penalty_map_[current_solution.attribute_added] += 1;
         }
-
-        average_costs.total_duration_excess += current_solution_cost.total_duration_excess;
-        average_costs.total_load_excess += current_solution_cost.total_load_excess;
-        average_costs.total_ride_time_excess += current_solution_cost.total_ride_time_excess;
-        average_costs.total_time_window_excess += current_solution_cost.total_time_window_excess;
 
         if ((current_solution_cost.total_cost < best_valid_cost.total_cost) && is_feasible(current_solution_cost)) {
             
@@ -280,16 +274,6 @@ SolutionResult TabuSearch::search(int max_iterations) {
     std::cout << "Better: " << better << endl;
     std::cout << "Same  : " << same << endl;
     std::cout << "Worse : " << worse << endl;
-
-    average_costs.total_duration_excess /= max_iterations;
-    const double avg_load_excess = static_cast<double>(average_costs.total_load_excess) / static_cast<double>(max_iterations);
-    average_costs.total_ride_time_excess /= max_iterations;
-    average_costs.total_time_window_excess /= max_iterations;
-
-    std::cout << "Avg Duration Excess   : " << average_costs.total_duration_excess << endl;
-    std::cout << "Avg Load Excess       :" << avg_load_excess << endl;
-    std::cout << "Avg Ride Time Excess  :" << average_costs.total_ride_time_excess << endl;
-    std::cout << "Avg Time Window Excess:" << average_costs.total_time_window_excess << endl;
 
     for (int i : boost::irange(0, thread_count)) {
         move_q.put(QuitMove());
@@ -748,6 +732,8 @@ TabuSearch::send_moves_to_workers(
 
     while (solutions_sent != 0) {
         Solution candidate_solution = solution_q.get();
+
+        satisfies_initial_constraints(candidate_solution);
 
         const auto candidate_solution_cost = solution_cost(candidate_solution,
             relaxation_params, current_cost);

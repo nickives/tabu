@@ -9,7 +9,6 @@
 
 #include <vector>
 #include <variant>
-#include <boost/pool/pool_alloc.hpp>
 #include <memory_resource>
 #include "robin_hood.h"
 
@@ -78,16 +77,6 @@ struct Node {
     double y;
 };
 
-    
-
-//template <typename T>
-//using TabuPoolAllocator = boost::pool_allocator<
-//    T, boost::default_user_allocator_new_delete, std::mutex, 65536, 65536>;
-//
-//template <typename T>
-//using TabuFastPoolAllocator = boost::fast_pool_allocator<
-//    T, boost::default_user_allocator_new_delete, std::mutex, 65536, 65536>;
-
 typedef vector<const Node*> NodePtrVector;
 typedef list<const Node*> NodePtrList;
 
@@ -112,12 +101,14 @@ struct RouteExcess {
     double ride_time_excess_L = 0;
     double time_window_excess = 0;
     double duration = 0;
+    double distance = 0;
     double duration_excess = 0;
 };
 typedef vector<RouteExcess> RouteExcessVector;
 
 struct NodeAttributes {
     RequestId request_id{};
+    NodeId node_id{};
     double arrival_A = 0;
     double waiting_W = 0;
     double begin_service_B = 0;
@@ -134,6 +125,7 @@ struct SolutionCost {
     RouteCost total_cost = 0;
     double raw_cost = 0;
     double duration = 0;
+    double distance = 0;
     unsigned int total_load_excess = 0;
     double total_ride_time_excess = 0;
     double total_time_window_excess = 0;
@@ -157,6 +149,7 @@ struct Solution {
     PenaltyKey attribute_added{0,0};
     PenaltyKey attribute_removed{ 0,0 };
     bool swap = false;
+    std::chrono::nanoseconds move_time{};
 };
 
 typedef vector<Solution> Neighbourhood;
@@ -172,7 +165,8 @@ struct RelaxationParams {
 
 struct SolutionResult {
     Solution solution;
-    RouteCost cost;
+    SolutionCost cost;
+    std::chrono::nanoseconds average_move_time;
 };
 
 struct SPIMove {
@@ -196,6 +190,6 @@ struct QuitMove {
 
 };
 
-typedef variant<SPIMove, SwapMove, QuitMove> MoveVariant;
+typedef std::variant<SPIMove, SwapMove, QuitMove> MoveVariant;
 
 #endif //TABU_TABUTYPES_H

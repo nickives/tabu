@@ -194,6 +194,7 @@
     <ClCompile Include="BlockingQueue.cpp" />
     <ClCompile Include="BlockingSolutionQueue.cpp" />
     <ClCompile Include="DARProblem.cpp" />
+    <ClCompile Include="HashProvider.cpp" />
     <ClCompile Include="InvalidSolutionException.cpp" />
     <ClCompile Include="BlockingMoveQueue.cpp" />
     <ClCompile Include="ProblemReader.cpp" />
@@ -209,6 +210,7 @@
     <ClInclude Include="BlockingQueue.h" />
     <ClInclude Include="BlockingSolutionQueue.h" />
     <ClInclude Include="DARProblem.h" />
+    <ClInclude Include="HashProvider.h" />
     <ClInclude Include="InvalidSolutionException.h" />
     <ClInclude Include="BlockingMoveQueue.h" />
     <ClInclude Include="ProblemReader.h" />

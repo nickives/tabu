@@ -1,3 +1,5 @@
+#include <numeric>
+
 #include "SolutionFileWriter.h"
 
 void SolutionFileWriter::addSolution(const SolutionResult& solution_result)
@@ -10,15 +12,24 @@ void SolutionFileWriter::addSolution(const SolutionResult& solution_result)
         }
         file << " : Duration : " << std::to_string(routes[r].route_excess.duration) << std::endl;
     }
-    file << "Total Cost: " << solution_result.cost << endl << endl;
+    file << "Total Cost: " << solution_result.cost.total_cost << endl;
+    const double total_duration = std::accumulate(
+        routes.cbegin(),
+        routes.cend(),
+        0.0,
+        [](const double sum, const Route& curr){
+            return sum + curr.route_excess.duration;
+        });
+    file << "Total Duration: " << solution_result.cost.duration << endl;
+    file << "Total Distance: " << solution_result.cost.distance << endl;
+    file << "Average Move time: " << solution_result.average_move_time << endl;
+
 }
 
 void SolutionFileWriter::addRunningTime(const std::chrono::milliseconds& time_in_ms)
 {
     file << "Running time (ms): " << time_in_ms << endl;
 }
-
-
 
 void SolutionFileWriter::close()
 {

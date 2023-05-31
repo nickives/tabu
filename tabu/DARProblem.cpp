@@ -7,15 +7,6 @@
 #include "DARProblem.h"
 #include "tabutypes.h"
 
-//DARProblem::DARProblem(DARProblem&& o) noexcept
-//    : nodes(o.nodes), distances(o.distances),
-//    number_of_vehicles(o.number_of_vehicles), number_of_requests(o.number_of_requests),
-//    vehicle_capacity(o.vehicle_capacity), maximum_ride_time(o.maximum_ride_time),
-//    planning_horizon(o.planning_horizon), path(o.path)
-//{
-//
-//}
-
 double DARProblem::distance(const double& x1, const double& y1, const double& x2, const double& y2) {
     return std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
 }

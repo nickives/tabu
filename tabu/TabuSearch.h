@@ -82,15 +82,9 @@ private:
         distance(const NodeId& node_idx1, const NodeId& node_idx2) const;
 
 
-    [[nodiscard]] RouteExcess
-        route_cost(const NodePtrVector& nodes) const;
-
     [[nodiscard]] SolutionCost
         solution_cost(const Solution& solution, const RelaxationParams& relaxation_params,
             const double previous_cost) const;
-
-    static Solution
-        apply_two_opt(const Solution& solution, const int& route_idx, const int& i, const int& j);
 
     Neighbourhood
         generate_neighborhood(const Solution& solution, TabuList& tabu_list,
@@ -102,9 +96,9 @@ private:
             const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria,
             double current_cost, const RelaxationParams& relaxation_params);
 
-    [[nodiscard]] pair<Solution, SolutionCost>
+    [[nodiscard]] tuple<Solution, SolutionCost, uint64_t, std::chrono::nanoseconds>
         send_moves_to_workers(const Solution& solution, TabuList& tabu_list,
-            const uint64_t& current_iteration, const AspirationCriteria& aspiriation_criteria,
+            const uint64_t& current_iteration, AspirationCriteria& aspiration_criteria,
             double current_cost, const RelaxationParams& relaxation_params,
             BlockingMoveQueue& move_q, BlockingSolutionQueue& solution_q);
 
